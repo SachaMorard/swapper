@@ -1,0 +1,26 @@
+#OS generated files
+DS_Store
+*.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+#ECLIPSE, NETBEANS, Intellij IDE
+nbproject
+.buildpath
+.project
+.settings
+.idea
+
+#Specific
+swapper.yml
+swappers.yml
+src-master/vendor
+pkg
+src
+bin
+profile.cov
+release

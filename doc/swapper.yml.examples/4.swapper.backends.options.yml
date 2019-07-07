@@ -1,0 +1,31 @@
+version: '1'
+
+services:
+  my-app:
+    ports:
+      - 80:80
+    containers:
+      - image: nginx
+        tag: 1.17.0
+        health-cmd: curl --silent --fail localhost:80/status || exit 1
+        health-interval: 5s
+        health-retries: 2
+        health-timeout: 2s
+        logging:
+          options:
+            max-size: "10m"
+            max-file: "10"
+        extra_hosts:
+          - "myhostname:127.0.0.1"
+
+      - image: nginx
+        tag: 1.16.0
+        health-cmd: curl --silent --fail localhost:80/status || exit 1
+        health-interval: 5s
+        health-retries: 2
+        health-timeout: 2s
+        logging:
+          driver: gcplog
+        extra_hosts:
+          - "myhostname:127.0.0.1"
+

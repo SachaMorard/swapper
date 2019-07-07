@@ -1,0 +1,13 @@
+version: '1'
+
+services:
+  my-app:
+    ports:
+      - 80:80
+    containers:
+      - image: nginx
+        tag: ${TAG}
+        port: 80
+        environment:
+          ENV: ${ENV}
+

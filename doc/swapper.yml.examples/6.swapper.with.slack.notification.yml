@@ -1,0 +1,14 @@
+version: '1'
+
+slack:
+  webhook-url: https://hooks.slack.com/services/T00000000/B00000000/00000000000000000
+  channel: mychannel
+
+services:
+  my-app:
+    ports:
+      - 80:80
+    containers:
+      - image: nginx
+        tag: 1.17.0
+

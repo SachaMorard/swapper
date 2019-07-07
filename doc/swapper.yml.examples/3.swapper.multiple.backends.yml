@@ -1,0 +1,18 @@
+version: '1'
+
+services:
+  my-app:
+    ports:
+      - 80:80
+    containers:
+      - image: nginx
+        tag: 1.17.0
+      - image: nginx
+        tag: 1.16.0
+
+  my-api:
+    ports:
+      - 81:80
+    containers:
+      - image: nginx
+        tag: latest

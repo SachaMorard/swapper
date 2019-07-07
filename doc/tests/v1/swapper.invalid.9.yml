@@ -1,0 +1,15 @@
+version: '1'
+
+masters:
+  - nkldfs
+
+services:
+  my-app:
+    ports:
+      - 80:80
+    containers:
+      - image: nginx
+        tag: 1.17.0
+        environment:
+          ENV: prod
+

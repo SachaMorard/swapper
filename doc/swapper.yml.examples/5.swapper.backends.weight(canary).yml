@@ -1,0 +1,15 @@
+version: '1'
+
+services:
+  my-app:
+    ports:
+      - 80:80
+    containers:
+      - image: nginx
+        tag: 1.17.0
+        weight: 20
+
+      - image: nginx
+        tag: 1.16.0
+        weight: 80
+

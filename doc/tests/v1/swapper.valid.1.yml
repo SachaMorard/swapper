@@ -1,0 +1,32 @@
+version: '1'
+
+services:
+  nginx:
+    ports:
+      - 80:80
+      - 443:443
+    containers:
+      - image: nginx
+        tag: ${NGINXTAG}
+        environment:
+          ENV: ${ENV}
+        extra_hosts:
+          - "myhostname:127.0.0.1"
+      - image: nginx
+        tag: ${NGINXTAG}
+        environment:
+          ENV: ${ENV}
+        extra_hosts:
+          - "myhostname:127.0.0.2"
+
+  nginx2:
+    ports:
+      - 800:80
+      - 200:80
+    containers:
+      - image: nginx
+        tag: ${NGINXTAG}
+        environment:
+          ENV: ${ENV}
+        extra_hosts:
+          - "myhostname:127.0.0.1"
