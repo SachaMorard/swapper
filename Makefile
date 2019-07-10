@@ -5,10 +5,6 @@ DOCKER_TAG_SWAPPER_PROXY = 1.0.0
 DOCKER_REPO_SWAPPER_PROXY = gcr.io/docker-swapper/swapper-proxy
 DOCKER_IMAGE_SWAPPER_PROXY = $(DOCKER_REPO_SWAPPER_PROXY):$(DOCKER_TAG_SWAPPER_PROXY)
 
-DOCKER_TAG_SWAPPER_MASTER = 1.0.0
-DOCKER_REPO_SWAPPER_MASTER = gcr.io/docker-swapper/swapper-master
-DOCKER_IMAGE_SWAPPER_MASTER = $(DOCKER_REPO_SWAPPER_MASTER):$(DOCKER_TAG_SWAPPER_MASTER)
-
 GOPATH = $(shell pwd)
 GOBIN = $(shell pwd)/bin
 export GOPATH
@@ -30,15 +26,6 @@ docker-push-swapper-proxy: ## Build and push swapper-proxy image to registry
 	make build-swapper-proxy
 	echo '--> Push ${DOCKER_IMAGE_SWAPPER_PROXY}'
 	docker push ${DOCKER_IMAGE_SWAPPER_PROXY}
-
-build-swapper-master: ## Build docker image for swapper-master
-	docker build -f docker/swapper-master/Dockerfile -t ${DOCKER_IMAGE_SWAPPER_MASTER} .
-
-docker-push-swapper-master: ## Build and push swapper-master image to registry
-	echo '--> Build image'
-	make build-swapper-master
-	echo '--> Push ${DOCKER_IMAGE_SWAPPER_MASTER}'
-	docker push ${DOCKER_IMAGE_SWAPPER_MASTER}
 
 go-install: ## go install
 	go install

@@ -12,9 +12,9 @@ Swapper is a simple way to deploy containers, on your existing infrastructure, a
 Run this command to download the current stable release of Swapper:
 
 ```bash
-sudo curl -L "https://github.com/SachaMorard/swapper/releases/download/1.0.0/swapper-$(uname -s)-$(uname -m)" -o /usr/local/bin/swapper
+sudo curl -L "https://github.com/SachaMorard/swapper/releases/download/1.0.1/swapper-$(uname -s)-$(uname -m)" -o /usr/local/bin/swapper
 ```
->To install a different version of Swapper, substitute 1.0.0 with the version of Swapper you want to use.
+>To install a different version of Swapper, substitute 1.0.1 with the version of Swapper you want to use.
 
 Apply executable permissions to the binary:
 

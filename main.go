@@ -58,8 +58,7 @@ services:
 )
 
 const (
-	masterImage = "gcr.io/docker-swapper/swapper-master:1.0.0"
-	version    = "1.0.0"
+	version    = "1.0.1"
 	pidDirectory = "/tmp/swapper"
 	yamlDirectory = "/tmp/swapper"
 )
