@@ -64,7 +64,6 @@ services:
     containers:
       - image: nginx
         tag: 1.16.0
-        port: 80
 ```
 
 Deploy your file.
@@ -87,7 +86,6 @@ services:
     containers:
       - image: nginx
         tag: 1.17.0
-        port: 80
 ```
 
 Then, deploy the new conf
@@ -98,7 +96,7 @@ You'll see that your node will update without any interruption.
 
 ### Dynamic configuration
 
-You can add variables to your swapper.yml 
+You can add variables to your swapper.yml with `${}` syntax
 ```
 version: '1'
 
@@ -109,12 +107,32 @@ services:
     containers:
       - image: nginx
         tag: ${TAG}
-        port: 80
 ```
 Then, deploy the new conf
 ```bash
 swapper deploy -f swapper.yml --var TAG=1.15.10
 ```
+
+You can add command to your swapper.yml with `$()` syntax. When a node retrieves the swapper.yml configuration, it replaces $(COMMAND) with the result of the command. 
+```
+version: '1'
+
+services:
+  nginx:
+    ports:
+      - 80:80
+    containers:
+      - image: nginx
+        tag: 1.17.0
+        port: 80
+        logging:
+          driver: fluentd
+          options:
+            fluentd-address: $(hostname):24224
+        extra_hosts:
+          - machine-host:$(ifconfig | grep "inet " | grep -E "broadcast|Bcast" | awk '{print $2}' | tail -n1 | sed "s/adr://g" | sed "s/addr://g")
+```
+
 
 ### More?
 

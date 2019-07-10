@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
@@ -233,7 +234,11 @@ func runContainers(yamlConf YamlConf) (err error) {
 
 				for k, v := range container.LoggingOptions {
 					command = append(command, "--log-opt")
-					command = append(command, k.(string) + "=" + v.(string))
+					logOpt, err := ReplaceCommandIfExist(v.(string))
+					if err != nil {
+						return err
+					}
+					command = append(command, k.(string) + "=" + logOpt)
 				}
 
 				if container.HealthCmd != "" {
@@ -258,7 +263,11 @@ func runContainers(yamlConf YamlConf) (err error) {
 
 				for _, v := range container.ExtraHosts {
 					command = append(command, "--add-host")
-					command = append(command, v.(string))
+					extraHost, err := ReplaceCommandIfExist(v.(string))
+					if err != nil {
+						return err
+					}
+					command = append(command, extraHost)
 				}
 
 				for k, v := range container.Envs {
@@ -277,7 +286,11 @@ func runContainers(yamlConf YamlConf) (err error) {
 							value = strconv.Itoa(val)
 						}
 					}
-					command = append(command, k.(string) + "=" + value)
+					envValue, err := ReplaceCommandIfExist(value)
+					if err != nil {
+						return err
+					}
+					command = append(command, k.(string) + "=" + envValue)
 				}
 				command = append(command, "-d")
 				command = append(command, container.Image+":"+container.Tag)
@@ -298,6 +311,24 @@ func runContainers(yamlConf YamlConf) (err error) {
 	}
 
 	return err
+}
+
+func ReplaceCommandIfExist(input string) (str string, err error) {
+	re := regexp.MustCompile(`\$\(.+\)`)
+	matches := re.FindAllString(input, -1)
+	str = input
+	var command string
+	for _, p := range matches {
+		command = strings.Replace(strings.Replace(p, "$(", "", 1), ")", "", -1)
+		cmd := exec.Command("bash","-c", command)
+		out, err := cmd.Output()
+		if err != nil {
+			return str, errors.New(fmt.Sprintf(errorMessages["command_failed"], command))
+		}
+		outStr := strings.TrimSpace(string(out))
+		str = strings.Replace(str, p, outStr, -1)
+	}
+	return str, nil
 }
 
 func ListenToMasters(yamlConf YamlConf) {

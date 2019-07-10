@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/docopt/docopt-go"
+	"io/ioutil"
 	"os"
 	"reflect"
 	"testing"
@@ -62,6 +63,23 @@ func TestNodeStart2(t *testing.T) {
 func TestCurlSwapperYaml(t *testing.T) {
 	swapperYaml := CurlSwapperYaml("localhost:1207")
 	if swapperYaml == "" {
+		t.Fail()
+	}
+}
+
+func TestReplaceCommandIfExist(t *testing.T) {
+	str, err := ReplaceCommandIfExist("$(hostname):24224")
+	if err != nil {
+		t.Fail()
+	}
+	hostname, _ := GetHostname()
+	if str != hostname+":24224" {
+		t.Fail()
+	}
+
+	input, _ := ioutil.ReadFile("doc/swapper.yml.examples/7.swapper.with.command.yml")
+	str, err = ReplaceCommandIfExist(string(input))
+	if err != nil {
 		t.Fail()
 	}
 }

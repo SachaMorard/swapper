@@ -117,5 +117,10 @@ Or you can specify its address with following command:
 		"ports_empty": `
 [ERROR] Ports cannot be an empty string
 `,
+
+		"command_failed": `
+[ERROR] A command inside your yaml failed:
+%s
+`,
 	}
 )

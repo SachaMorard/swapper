@@ -1,0 +1,16 @@
+version: '1'
+
+services:
+  my-app:
+    ports:
+      - 80:80
+    containers:
+      - image: nginx
+        tag: 1.16.0
+        logging:
+          driver: fluentd
+          options:
+            fluentd-address: $(hostname):24224
+        extra_hosts:
+          - machine-host:$(ifconfig | grep "inet " | grep -E "broadcast|Bcast" | awk '{print $2}' | tail -n1 | sed "s/adr://g" | sed "s/addr://g")
+
