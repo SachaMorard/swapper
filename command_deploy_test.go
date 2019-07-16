@@ -55,19 +55,19 @@ func TestDeploy3(t *testing.T) {
 }
 
 func TestDeploy4(t *testing.T) {
-	args := []string{"deploy", "-f", "doc/tests/v1/swapper.invalid.7.yml"}
+	args := []string{"deploy", "-f", "tests/v1/swapper.invalid.7.yml"}
 	response := Deploy(args)
 	if response.Message != errorMessages["no_time_field"] {
 		t.Fail()
 	}
 
-	args = []string{"deploy", "-f", "doc/tests/v1/swapper.invalid.8.yml"}
+	args = []string{"deploy", "-f", "tests/v1/swapper.invalid.8.yml"}
 	response = Deploy(args)
 	if response.Message != errorMessages["no_hash_field"] {
 		t.Fail()
 	}
 
-	args = []string{"deploy", "-f", "doc/tests/v1/swapper.invalid.9.yml"}
+	args = []string{"deploy", "-f", "tests/v1/swapper.invalid.9.yml"}
 	response = Deploy(args)
 	if response.Message != errorMessages["no_masters_field"] {
 		t.Fail()

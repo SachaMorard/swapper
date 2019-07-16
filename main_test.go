@@ -101,7 +101,7 @@ func TestPrepareSwapperYaml(t *testing.T) {
 		t.Fail()
 	}
 
-	_, err = PrepareSwapperYaml("doc/tests/v1/swapper.invalid.yml", vars)
+	_, err = PrepareSwapperYaml("tests/v1/swapper.invalid.yml", vars)
 	if err.Error() != errorMessages["yaml_invalid"] {
 		t.Fail()
 	}
@@ -126,7 +126,7 @@ func TestPrepareSwapperYaml(t *testing.T) {
 
 func TestCreateHaproxyConf(t *testing.T) {
 	vars := []string{"NGINXTAG=1.17.0", "ENV=prod"}
-	cleanYaml, err := PrepareSwapperYaml("doc/tests/v1/swapper.valid.1.yml", vars)
+	cleanYaml, err := PrepareSwapperYaml("tests/v1/swapper.valid.1.yml", vars)
 	if err != nil {
 		t.Fail()
 	}
