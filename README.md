@@ -4,8 +4,8 @@ Swapper is a simple way to deploy containers, on your existing infrastructure, a
 
 
 2 kind of swapper exist:
-- masters: those who spread the configuration of your cluster
-- nodes: those who run the containers
+- masters: those who store and share the configuration file
+- nodes: those who run the containers described on the configuration file
 
 ## Installation
 
@@ -33,19 +33,19 @@ For example:
 ### Start Master(s)
 
 First, connect to a server (with swapper installed) and start a master:
-```
+```bash
 swapper master start
 ```
 
 If you want more than one master to get resilient, connect to an other server and start an other master that'll join the first one:
-```
+```bash
 swapper master start --join first-master-hostname
 ```
 
 ### Start Node(s)
 
 Then, connect to a new server and start the first node:
-```
+```bash
 swapper node start --join first-master-hostname,second-master-hostname
 ```
 As you can see, your node is syncing with the masters and run some containers.
@@ -54,7 +54,7 @@ You can start as many nodes as you want
 ### Deploy your containers
 
 Connect to a master, then create a swapper.yml configuration file to describe what your nodes will do
-```
+```yaml
 version: '1'
 
 services:
@@ -76,7 +76,7 @@ Instantly, the nodes will understand that they have to rollout new containers.
 ### To deploy a new version of your containers
 
 Connect to a master and change the swapper.yml file (look at the nginx tag)
-```
+```yaml
 version: '1'
 
 services:

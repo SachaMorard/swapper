@@ -122,5 +122,9 @@ Or you can specify its address with following command:
 [ERROR] A command inside your yaml failed:
 %s
 `,
+		"master_field_needed": `
+[ERROR] master.%s field is required or invalid
+`,
+
 	}
 )

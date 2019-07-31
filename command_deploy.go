@@ -2,14 +2,20 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"crypto/md5"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/docopt/docopt-go"
+	"cloud.google.com/go/storage"
 )
 
 var (
@@ -59,6 +65,7 @@ func Deploy(argv []string) Response {
 	if err != nil {
 		return Fail(err.Error())
 	}
+
 	if len(yamlConf.Masters) != 0 {
 		return Fail(errorMessages["no_masters_field"])
 	}
@@ -71,27 +78,92 @@ func Deploy(argv []string) Response {
 		return Fail(errorMessages["no_hash_field"])
 	}
 
-	if masterHostname == "localhost" {
-		masterHostname, _ = GetHostname()
-	}
-	if masterHostname == "127.0.0.1" {
-		masterHostname, _ = GetHostname()
+	if yamlConf.Master.Driver == "local" {
+		if masterHostname == "localhost" {
+			masterHostname, _ = GetHostname()
+		}
+		if masterHostname == "127.0.0.1" {
+			masterHostname, _ = GetHostname()
+		}
+
+		i := strings.Index(masterHostname, ":")
+		if i == -1 {
+			masterHostname = masterHostname + ":1207"
+		}
+
+		swapperYml := CurlSwapperYaml(masterHostname)
+		if swapperYml == "" {
+			return Fail(fmt.Sprintf(errorMessages["bad_master_addr"], masterHostname))
+		}
+
+		masterSplit := strings.Split(masterHostname, ":")
+		port := masterSplit[1]
+
+		return DeployFile(cleanYaml, port, yamlConf)
 	}
 
-	i := strings.Index(masterHostname, ":")
-	if i == -1 {
-		masterHostname = masterHostname + ":1207"
+	hasher := md5.New()
+	hasher.Write([]byte(cleanYaml))
+	hash := hex.EncodeToString(hasher.Sum(nil))
+	cleanYaml = cleanYaml+"hash: "+hash
+
+	if yamlConf.Master.Driver == "gcp" {
+		ctx := context.Background()
+
+		if yamlConf.Master.CredentialsFile != "" {
+			_ = os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", yamlConf.Master.CredentialsFile)
+		}
+
+		// Creates a client.
+		client, errClient := storage.NewClient(ctx)
+		if errClient != nil {
+			return Fail(fmt.Sprintf("Failed to create client: %v", errClient))
+		}
+
+		// Sets the name for the new bucket.
+		bucketName := "swapper-master-"+yamlConf.Master.ProjectId
+
+		// Creates a Bucket instance if not exists
+		bucket := client.Bucket(bucketName)
+		_, err = bucket.Attrs(ctx)
+		if err != nil {
+			// Creates the new bucket.
+			if err := bucket.Create(ctx, yamlConf.Master.ProjectId, nil); err != nil {
+				msg := fmt.Sprintf("Deployment failed\nFailed to create bucket: %v", err)
+				_ = SlackSendError(msg, yamlConf)
+				return Fail(msg)
+			}
+			fmt.Printf("Bucket %v created.\n", bucketName)
+		}
+
+
+		if err := write(cleanYaml, client, bucketName, yamlConf.Master.ClusterName+"/swapper.yml"); err != nil {
+			msg := fmt.Sprintf("Deployment failed\nCannot write object: %v", err)
+			_ = SlackSendError(msg, yamlConf)
+			return Fail(msg)
+		}
+
+		_ = SlackSendSuccess("Deployment succeed", yamlConf)
+		nodeInstruction := "To start a node, execute:\nswapper node start --join gs://"+bucketName+"/"+yamlConf.Master.ClusterName+"/swapper.yml"
+		return Success("\n>> Deployment succeed\n"+nodeInstruction+"\n")
 	}
 
-	swapperYml := CurlSwapperYaml(masterHostname)
-	if swapperYml == "" {
-		return Fail(fmt.Sprintf(errorMessages["bad_master_addr"], masterHostname))
+	return Fail("")
+}
+
+func write(swapperYml string, client *storage.Client, bucketName string, object string) error {
+
+	ctx := context.Background()
+	src := strings.NewReader(swapperYml)
+	wc := client.Bucket(bucketName).Object(object).NewWriter(ctx)
+	if _, err := io.Copy(wc, src); err != nil {
+		return err
 	}
-
-	masterSplit := strings.Split(masterHostname, ":")
-	port := masterSplit[1]
-
-	return DeployFile(cleanYaml, port, yamlConf)
+	if err := wc.Close(); err != nil {
+		return err
+	}
+	// [END upload_file]
+	return nil
 }
 
 func DeployFile(cleanYaml string, port string, yamlConf YamlConf) Response {

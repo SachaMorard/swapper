@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"cloud.google.com/go/storage"
 	"gopkg.in/yaml.v2"
 )
 
@@ -315,7 +317,43 @@ type SlackAttachment struct {
 	Color string `json:"color"`
 }
 
+func GetSwapperYamlFromGCP(hostname string) string {
+	ctx := context.Background()
+
+	// Creates a client.
+	client, errClient := storage.NewClient(ctx)
+	if errClient != nil {
+		return ""
+	}
+
+	// Sets the name for the new bucket.
+	hostname = strings.Replace(hostname, "gs://", "", -1)
+	bucketNames := strings.Split(hostname, "/")
+	if len(bucketNames) != 3 {
+		return ""
+	}
+
+	bucketName := bucketNames[0]
+	object := bucketNames[1]+"/swapper.yml"
+	rc, err := client.Bucket(bucketName).Object(object).NewReader(ctx)
+	if err != nil {
+		return ""
+	}
+	defer rc.Close()
+
+	data, err := ioutil.ReadAll(rc)
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
 func CurlSwapperYaml(hostname string) string {
+
+	if strings.Contains(hostname, "gs://") {
+		return GetSwapperYamlFromGCP(hostname)
+	}
+
 	resp, err := http.Get("http://"+hostname+"/swapper.yml")
 	if err != nil {
 		return ""
