@@ -67,8 +67,3 @@ func TestParseSwapperYaml(t *testing.T) {
 		t.Fail()
 	}
 }
-
-//func TestInterpretV1(t *testing.T) {
-//	input, _ := ioutil.ReadFile("swapper.yml")
-//	_, _ = ParseSwapperYaml(string(input))
-//}

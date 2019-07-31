@@ -137,7 +137,7 @@ func Deploy(argv []string) Response {
 		}
 
 
-		if err := write(cleanYaml, client, bucketName, yamlConf.Master.ClusterName+"/swapper.yml"); err != nil {
+		if err := gcsWrite(cleanYaml, client, bucketName, yamlConf.Master.ClusterName+"/swapper.yml"); err != nil {
 			msg := fmt.Sprintf("Deployment failed\nCannot write object: %v", err)
 			_ = SlackSendError(msg, yamlConf)
 			return Fail(msg)
@@ -151,7 +151,7 @@ func Deploy(argv []string) Response {
 	return Fail("")
 }
 
-func write(swapperYml string, client *storage.Client, bucketName string, object string) error {
+func gcsWrite(swapperYml string, client *storage.Client, bucketName string, object string) error {
 
 	ctx := context.Background()
 	src := strings.NewReader(swapperYml)
