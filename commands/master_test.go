@@ -1,7 +1,9 @@
-package main
+package commands
 
 import (
 	"fmt"
+	"github.com/sachamorard/swapper/response"
+	"github.com/sachamorard/swapper/utils"
 	"os"
 	"reflect"
 	"testing"
@@ -11,21 +13,21 @@ import (
 )
 
 func TestMasterStart(t *testing.T) {
-	_ = os.Remove(yamlDirectory+"/swapper-1207.yml")
+	_ = os.Remove(YamlDirectory+"/swapper-1207.yml")
 	// Stop running master (if exists)
-	oldOut := ShutUpOut()
+	oldOut := utils.ShutUpOut()
 	args := []string{"master", "stop"}
 	MasterStop(args)
-	RestoreOut(oldOut)
+	utils.RestoreOut(oldOut)
 }
 
 func TestMasterStart2(t *testing.T) {
 	// Now start master
 	args := []string{"master", "start", "-p", "0"}
-	oldOut := ShutUpOut()
-	response := MasterStart(args)
-	RestoreOut(oldOut)
-	if response.Message != fmt.Sprintf(errorMessages["master_failed"], "port 0 is not valid") {
+	oldOut := utils.ShutUpOut()
+	resp := MasterStart(args)
+	utils.RestoreOut(oldOut)
+	if resp.Message != fmt.Sprintf(response.ErrorMessages["master_failed"], "port 0 is not valid") {
 		t.Fail()
 	}
 }
@@ -33,84 +35,84 @@ func TestMasterStart2(t *testing.T) {
 func TestMasterStart3(t *testing.T) {
 	// Now start master
 	args := []string{"master", "start", "-d"}
-	oldOut := ShutUpOut()
-	response := MasterStart(args)
-	RestoreOut(oldOut)
-	if response.Code != 0 {
+	oldOut := utils.ShutUpOut()
+	resp := MasterStart(args)
+	utils.RestoreOut(oldOut)
+	if resp.Code != 0 {
 		t.Fail()
 	}
 	time.Sleep(2000 * time.Millisecond)
 
 	// Now start master
 	args = []string{"master", "start", "-d"}
-	oldOut = ShutUpOut()
-	response = MasterStart(args)
-	RestoreOut(oldOut)
-	if response.Message != errorMessages["master_already_started"] {
+	oldOut = utils.ShutUpOut()
+	resp = MasterStart(args)
+	utils.RestoreOut(oldOut)
+	if resp.Message != response.ErrorMessages["master_already_started"] {
 		t.Fail()
 	}
 
 	// Stop running master (if exists)
-	oldOut = ShutUpOut()
+	oldOut = utils.ShutUpOut()
 	args = []string{"master", "stop"}
-	response = MasterStop(args)
-	RestoreOut(oldOut)
-	if response.Code != 0 {
+	resp = MasterStop(args)
+	utils.RestoreOut(oldOut)
+	if resp.Code != 0 {
 		t.Fail()
 	}
 }
 
 func TestMasterJoin(t *testing.T) {
 	args := []string{"master", "start", "-d"}
-	oldOut := ShutUpOut()
-	response := MasterStart(args)
-	RestoreOut(oldOut)
-	if response.Code != 0 {
+	oldOut := utils.ShutUpOut()
+	resp := MasterStart(args)
+	utils.RestoreOut(oldOut)
+	if resp.Code != 0 {
 		t.Fail()
 	}
 
 	time.Sleep(2000 * time.Millisecond)
 
 	args = []string{"master", "start", "-d", "--join", "jklf", "-p", "1208"}
-	oldOut = ShutUpOut()
-	response = MasterStart(args)
-	RestoreOut(oldOut)
-	if response.Message != errorMessages["cannot_contact_master"] {
+	oldOut = utils.ShutUpOut()
+	resp = MasterStart(args)
+	utils.RestoreOut(oldOut)
+	if resp.Message != response.ErrorMessages["cannot_contact_master"] {
 		t.Fail()
 	}
 
-	hostname, _ := GetHostname()
+	hostname, _ := utils.GetHostname()
 	args = []string{"master", "start", "-d", "--join", hostname}
-	oldOut = ShutUpOut()
-	response = MasterStart(args)
-	RestoreOut(oldOut)
-	if response.Message != fmt.Sprintf(errorMessages["wrong_port"], hostname) {
+	oldOut = utils.ShutUpOut()
+	resp = MasterStart(args)
+	utils.RestoreOut(oldOut)
+	if resp.Message != fmt.Sprintf(response.ErrorMessages["wrong_port"], hostname) {
 		t.Fail()
 	}
 
 	args = []string{"master", "start", "-d", "--join", hostname, "-p", "0"}
-	oldOut = ShutUpOut()
-	response = MasterStart(args)
-	RestoreOut(oldOut)
-	if response.Message != fmt.Sprintf(errorMessages["master_failed"], "port 0 is not valid") {
+	oldOut = utils.ShutUpOut()
+	resp = MasterStart(args)
+	utils.RestoreOut(oldOut)
+	if resp.Message != fmt.Sprintf(response.ErrorMessages["master_failed"], "port 0 is not valid") {
 		t.Fail()
 	}
 
 	args = []string{"master", "start", "-d", "--join", hostname, "-p", "1208"}
-	oldOut = ShutUpOut()
-	response = MasterStart(args)
-	RestoreOut(oldOut)
-	if response.Code != 0 {
+	oldOut = utils.ShutUpOut()
+	resp = MasterStart(args)
+	utils.RestoreOut(oldOut)
+	if resp.Code != 0 {
 		t.Fail()
 	}
 
 	time.Sleep(2000 * time.Millisecond)
 	// Stop running masters
-	oldOut = ShutUpOut()
+	oldOut = utils.ShutUpOut()
 	args = []string{"master", "stop"}
-	response = MasterStop(args)
-	RestoreOut(oldOut)
-	if response.Code != 0 {
+	resp = MasterStop(args)
+	utils.RestoreOut(oldOut)
+	if resp.Code != 0 {
 		t.Fail()
 	}
 }

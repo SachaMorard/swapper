@@ -1,9 +1,14 @@
-package main
+package commands
 
 import (
 	"crypto/md5"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"github.com/sachamorard/swapper/response"
+	"github.com/sachamorard/swapper/utils"
+	"github.com/sachamorard/swapper/yaml"
+	"github.com/valyala/fasthttp"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -12,9 +17,115 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/valyala/fasthttp"
 )
+
+var (
+	haproxyBaseConf = `
+global
+    log 127.0.0.1 local5 debug
+
+defaults
+    log     global
+    option  dontlognull
+    timeout connect 5000
+    timeout client  50000
+    timeout server  50000
+`
+	currentHash = ""
+	firstYaml = `
+version: "1"
+
+services:
+  hello:
+    ports:
+      - 80:80
+    containers:
+      - image: nginx
+        tag: latest`
+)
+
+const (
+	PidDirectory = "/tmp/swapper"
+	YamlDirectory = "/tmp/swapper"
+)
+
+func CreateHaproxyConf(yamlConf yaml.YamlConf) (conf string, err error) {
+
+	var haproxyConf []string
+	// create frontend haproxy conf
+	haproxyConf = append(haproxyConf, haproxyBaseConf)
+	for _, frontend := range yamlConf.Frontends  {
+		haproxyConf = append(haproxyConf, "frontend "+frontend.Name)
+		haproxyConf = append(haproxyConf, "    option forwardfor")
+		haproxyConf = append(haproxyConf, "    mode tcp")
+		haproxyConf = append(haproxyConf, "    option tcplog")
+		haproxyConf = append(haproxyConf, "    maxconn 800")
+		haproxyConf = append(haproxyConf, "    bind 0.0.0.0:"+strconv.Itoa(frontend.Listen))
+		haproxyConf = append(haproxyConf, "    default_backend "+frontend.BackendName)
+		haproxyConf = append(haproxyConf, "")
+	}
+
+
+	for _, frontend := range yamlConf.Frontends {
+		haproxyConf = append(haproxyConf, "backend "+frontend.BackendName)
+		haproxyConf = append(haproxyConf, "    balance roundrobin")
+
+		for _, container := range frontend.Containers {
+			containerName := "swapper-container." + yamlConf.Hash + "." + frontend.ServiceName + "." + strconv.Itoa(container.Index)
+			Id, err := utils.Command("docker ps --format {{.ID}} --filter name=" + containerName)
+			if err != nil || Id == "" {
+				return conf, errors.New(fmt.Sprintf(response.ErrorMessages["container_failed"], containerName))
+			}
+
+			ipCommand := "docker inspect -f {{.NetworkSettings.IPAddress}} " + containerName
+			outIp, err := utils.Command(ipCommand)
+			if err != nil {
+				return conf, errors.New(fmt.Sprintf(response.ErrorMessages["container_ip_failed"], containerName))
+			}
+			ip := strings.TrimSpace(outIp)
+
+			haproxyConf = append(haproxyConf, "    server container_"+strconv.Itoa(container.Index)+" "+ip+":"+strconv.Itoa(frontend.Bind)+" check observe layer4 weight "+strconv.Itoa(container.Weight))
+		}
+	}
+
+	if len(haproxyConf) == 0 {
+		return conf, errors.New(response.ErrorMessages["haproxy_conf_empty"])
+	}
+
+	return strings.Join(haproxyConf, "\n"), err
+}
+
+func getYamlConfFromMasters(masters []string) (yamlConf yaml.YamlConf, err error) {
+
+	// shuffle masters array
+	rand.Seed(time.Now().UnixNano())
+	rand.Shuffle(len(masters), func(i, j int) { masters[i], masters[j] = masters[j], masters[i] })
+
+	// Get swapper.yml from master(s)
+	for _, master := range masters {
+		swapperYaml := CurlSwapperYaml(master)
+		if swapperYaml != "" {
+			yamlConf, err := yaml.ParseSwapperYaml(swapperYaml)
+			return yamlConf, err
+		}
+	}
+	return yamlConf, errors.New(response.ErrorMessages["cannot_contact_master"])
+}
+
+func CurlSwapperYaml(hostname string) string {
+	resp, err := http.Get("http://"+hostname+"/swapper.yml")
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	body, _ := ioutil.ReadAll(resp.Body)
+
+	if resp.Status != "200 OK" {
+		return ""
+	} else {
+		return string(body)
+	}
+}
 
 func unique(stringSlice []string) []string {
 	keys := make(map[string]bool)
@@ -29,7 +140,7 @@ func unique(stringSlice []string) []string {
 }
 
 func WriteSwapperYaml(swapperYaml string, currentPort string, masters []string, forceTime int64) error {
-	newYamlConf, err := ParseSwapperYaml(swapperYaml)
+	newYamlConf, err := yaml.ParseSwapperYaml(swapperYaml)
 	if err != nil {
 		return err
 	}
@@ -43,19 +154,19 @@ func WriteSwapperYaml(swapperYaml string, currentPort string, masters []string, 
 		newYamlConf.Time = forceTime
 	}
 
-	sourceFile := yamlDirectory+"/swapper-"+currentPort+".yml"
+	sourceFile := YamlDirectory+"/swapper-"+currentPort+".yml"
 	if _, err := os.Stat(sourceFile); err == nil {
 		oldYaml, err := ioutil.ReadFile(sourceFile)
 		if err != nil {
 			return err
 		}
-		oldYamlConf, err := ParseSwapperYaml(string(oldYaml))
+		oldYamlConf, err := yaml.ParseSwapperYaml(string(oldYaml))
 		if err != nil {
 			return err
 		}
 		masters = append(oldYamlConf.Masters, newYamlConf.Masters...)
 	}
-	hostname, _ := GetHostname()
+	hostname, _ := utils.GetHostname()
 	addr := hostname+":"+currentPort
 	masters = append(masters, addr)
 
@@ -79,13 +190,13 @@ func WriteSwapperYaml(swapperYaml string, currentPort string, masters []string, 
 }
 
 func AddMaster(masters []string, currentPort string) bool {
-	sourceFile := yamlDirectory+"/swapper-"+currentPort+".yml"
+	sourceFile := YamlDirectory+"/swapper-"+currentPort+".yml"
 	if _, err := os.Stat(sourceFile); err == nil {
 		swapperYaml, err := ioutil.ReadFile(sourceFile)
 		if err != nil {
 			return false
 		}
-		localYamlConf, err := ParseSwapperYaml(string(swapperYaml))
+		localYamlConf, err := yaml.ParseSwapperYaml(string(swapperYaml))
 		if err != nil {
 			return false
 		}
@@ -108,13 +219,13 @@ func AddMaster(masters []string, currentPort string) bool {
 }
 
 func RefreshMaster(currentPort string) (quorum []string) {
-	sourceFile := yamlDirectory+"/swapper-"+currentPort+".yml"
+	sourceFile := YamlDirectory+"/swapper-"+currentPort+".yml"
 	if _, err := os.Stat(sourceFile); err == nil {
 		swapperYaml, err := ioutil.ReadFile(sourceFile)
 		if err != nil {
 			return quorum
 		}
-		localYamlConf, err := ParseSwapperYaml(string(swapperYaml))
+		localYamlConf, err := yaml.ParseSwapperYaml(string(swapperYaml))
 		if err != nil {
 			return quorum
 		}
@@ -123,7 +234,7 @@ func RefreshMaster(currentPort string) (quorum []string) {
 		for _, master := range quorum {
 			distantYamlStr := CurlSwapperYaml(master)
 			if distantYamlStr != "" {
-				distantYamlConf, err := ParseSwapperYaml(distantYamlStr)
+				distantYamlConf, err := yaml.ParseSwapperYaml(distantYamlStr)
 				if err == nil {
 					if distantYamlConf.Time > localYamlConf.Time {
 						err = ioutil.WriteFile(sourceFile, []byte(distantYamlStr), 0644)
@@ -140,20 +251,20 @@ func RefreshMaster(currentPort string) (quorum []string) {
 }
 
 func PingMasters(currentPort string) (quorum []string) {
-	sourceFile := yamlDirectory+"/swapper-"+currentPort+".yml"
+	sourceFile := YamlDirectory+"/swapper-"+currentPort+".yml"
 	if _, err := os.Stat(sourceFile); err == nil {
 		swapperYaml, err := ioutil.ReadFile(sourceFile)
 		if err != nil {
 			return quorum
 		}
-		localYamlConf, err := ParseSwapperYaml(string(swapperYaml))
+		localYamlConf, err := yaml.ParseSwapperYaml(string(swapperYaml))
 		if err != nil {
 			return quorum
 		}
 
 		quorum := GetQuorum(localYamlConf.Masters, currentPort)
 		for _, master := range quorum {
-			hostname, _ := GetHostname()
+			hostname, _ := utils.GetHostname()
 			resp, err := http.Get("http://"+master+"/ping?mynameis="+hostname+":"+currentPort)
 			if err != nil {
 				continue
@@ -171,13 +282,13 @@ func PingMasters(currentPort string) (quorum []string) {
 
 func FirstPing(currentPort string) {
 	time.Sleep(3000 * time.Millisecond)
-	sourceFile := yamlDirectory+"/swapper-"+currentPort+".yml"
+	sourceFile := YamlDirectory+"/swapper-"+currentPort+".yml"
 	if _, err := os.Stat(sourceFile); err == nil {
 		swapperYaml, err := ioutil.ReadFile(sourceFile)
 		if err != nil {
 			return
 		}
-		localYamlConf, err := ParseSwapperYaml(string(swapperYaml))
+		localYamlConf, err := yaml.ParseSwapperYaml(string(swapperYaml))
 		if err != nil {
 			return
 		}
@@ -187,7 +298,7 @@ func FirstPing(currentPort string) {
 		}
 
 		for _, master := range localYamlConf.Masters {
-			hostname, _ := GetHostname()
+			hostname, _ := utils.GetHostname()
 			resp, _ := http.Get("http://"+master+"/ping?mynameis="+hostname+":"+currentPort)
 			if err != nil {
 				continue
@@ -216,7 +327,7 @@ func GetQuorum(masters []string, currentPort string) (quorum []string) {
 	rand.Seed(time.Now().UnixNano())
 	rand.Shuffle(len(masters), func(i, j int) { masters[i], masters[j] = masters[j], masters[i] })
 
-	hostname, _ := GetHostname()
+	hostname, _ := utils.GetHostname()
 	for _, master := range masters {
 		if master != hostname+":"+currentPort {
 			if len(quorum) < quorumNb {
@@ -234,7 +345,7 @@ func masterRequestHandler(ctx *fasthttp.RequestCtx) {
 	if string(ctx.Method()) == "GET" {
 		switch string(ctx.Path()) {
 		case "/swapper.yml":
-			sourceFile := yamlDirectory+"/swapper-"+masterPort+".yml"
+			sourceFile := YamlDirectory+"/swapper-"+masterPort+".yml"
 			yaml, ioErr := ioutil.ReadFile(sourceFile)
 			if ioErr != nil {
 				ctx.Response.Reset()

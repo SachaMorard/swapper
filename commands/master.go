@@ -1,8 +1,11 @@
-package main
+package commands
 
 import (
 	"errors"
 	"fmt"
+	"github.com/sachamorard/swapper/response"
+	"github.com/sachamorard/swapper/utils"
+	"github.com/sachamorard/swapper/yaml"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -17,7 +20,7 @@ import (
 )
 
 var (
-	masterUsage = `
+	MasterUsage = `
 swapper master COMMAND [OPTIONS].
 
 Manage a master
@@ -82,19 +85,19 @@ func MasterStartArgs(argv []string) docopt.Opts {
 	return arguments
 }
 
-func MasterStart(argv []string) Response {
+func MasterStart(argv []string) response.Response {
 	arguments := MasterStartArgs(argv)
 	port := arguments["--port"].(string)
 
 	if port == "0" {
-		return Fail(fmt.Sprintf(errorMessages["master_failed"], "port 0 is not valid"))
+		return response.Fail(fmt.Sprintf(response.ErrorMessages["master_failed"], "port 0 is not valid"))
 	}
 
 	if arguments["--join"] == nil {
 		// Master start
 		err := PrepareNewMaster(port)
 		if err != nil {
-			return Fail(err.Error())
+			return response.Fail(err.Error())
 		}
 		if arguments["--detach"] == false {
 			return NewMaster(port)
@@ -107,7 +110,7 @@ func MasterStart(argv []string) Response {
 		join := arguments["--join"].(string)
 		err := PrepareJoinMaster(port, join)
 		if err != nil {
-			return Fail(err.Error())
+			return response.Fail(err.Error())
 		}
 		if arguments["--detach"] == false {
 			return MasterJoin(port, join)
@@ -116,12 +119,12 @@ func MasterStart(argv []string) Response {
 			_ = cmd.Start()
 		}
 	}
-	return Success("Starting swapper in detach mode")
+	return response.Success("Starting swapper in detach mode")
 }
 
 func PrepareNewMaster(port string) error {
 	// check if at least one master is already running
-	files, err := ioutil.ReadDir(pidDirectory)
+	files, err := ioutil.ReadDir(PidDirectory)
 	if err != nil {
 		return err
 	}
@@ -130,7 +133,7 @@ func PrepareNewMaster(port string) error {
 		if strings.Contains(f.Name(), "swapper-master-") {
 			port := strings.Replace(f.Name(),"swapper-master-","", -1)
 			port = strings.Replace(port,".pid","", -1)
-			dat, err := ioutil.ReadFile(pidDirectory+"/"+f.Name())
+			dat, err := ioutil.ReadFile(PidDirectory+"/"+f.Name())
 			if err == nil {
 				p := string(dat)
 				pid, err := strconv.ParseInt(p, 10, 64)
@@ -146,23 +149,23 @@ func PrepareNewMaster(port string) error {
 				if err == nil {
 					runningMasters = append(runningMasters, f.Name())
 				} else {
-					_ = os.Remove(pidDirectory+"/"+f.Name())
+					_ = os.Remove(PidDirectory+"/"+f.Name())
 				}
 			}
 		}
 	}
 	if len(runningMasters) > 0 {
-		return errors.New(errorMessages["master_already_started"])
+		return errors.New(response.ErrorMessages["master_already_started"])
 	}
 
 	// get the old one swapper.yml if exists
-	sourceFile := yamlDirectory+"/swapper-"+port+".yml"
+	sourceFile := YamlDirectory+"/swapper-"+port+".yml"
 	swapperYaml := firstYaml
 	forceTime := int64(0)
 	if _, err := os.Stat(sourceFile); err == nil {
 		oldYaml, ioErr := ioutil.ReadFile(sourceFile)
 		if ioErr == nil {
-			yamlConf, err := ParseSwapperYaml(string(oldYaml))
+			yamlConf, err := yaml.ParseSwapperYaml(string(oldYaml))
 			if err != nil {
 				return err
 			}
@@ -181,12 +184,12 @@ func PrepareNewMaster(port string) error {
 	return nil
 }
 
-func NewMaster(port string) Response {
+func NewMaster(port string) response.Response {
 	fmt.Print("Swapper master is running... ")
 
 	pid := os.Getpid()
 	d1 := []byte(strconv.Itoa(pid))
-	_ = ioutil.WriteFile(pidDirectory+"/swapper-master-"+port+".pid", d1, 0644)
+	_ = ioutil.WriteFile(PidDirectory+"/swapper-master-"+port+".pid", d1, 0644)
 
 	// refresh master Loop
 	go RefreshMasterLoop(port)
@@ -196,15 +199,15 @@ func NewMaster(port string) Response {
 	masterPort = port
 	h := masterRequestHandler
 	if err := fasthttp.ListenAndServe(":"+port, h); err != nil {
-		return Fail(fmt.Sprintf(errorMessages["master_failed"], err.Error()))
+		return response.Fail(fmt.Sprintf(response.ErrorMessages["master_failed"], err.Error()))
 	}
 
-	return Success("")
+	return response.Success("")
 }
 
 func PrepareJoinMaster(port string, join string) error {
 	// check if a master is already running with this port
-	pidFile := pidDirectory+"/swapper-master-"+port+".pid"
+	pidFile := PidDirectory+"/swapper-master-"+port+".pid"
 	dat, err := ioutil.ReadFile(pidFile)
 	if err == nil {
 		p := string(dat)
@@ -219,7 +222,7 @@ func PrepareJoinMaster(port string, join string) error {
 		//NOTE : syscall.Signal is not available in Windows
 		err = proc.Signal(syscall.Signal(0))
 		if err == nil {
-			return errors.New(fmt.Sprintf(errorMessages["wrong_port"], join))
+			return errors.New(fmt.Sprintf(response.ErrorMessages["wrong_port"], join))
 		} else {
 			_ = os.Remove(pidFile)
 		}
@@ -230,10 +233,10 @@ func PrepareJoinMaster(port string, join string) error {
 	var masters []string
 	for _, a := range mastersHostname {
 		if a == "localhost" {
-			a, _ = GetHostname()
+			a, _ = utils.GetHostname()
 		}
 		if a == "127.0.0.1" {
-			a, _ = GetHostname()
+			a, _ = utils.GetHostname()
 		}
 
 		i := strings.Index(a, ":")
@@ -256,18 +259,18 @@ func PrepareJoinMaster(port string, join string) error {
 		}
 	}
 	if swapperYaml == "" {
-		return errors.New(errorMessages["cannot_contact_master"])
+		return errors.New(response.ErrorMessages["cannot_contact_master"])
 	}
 
 	// remove old swapper.yml
-	sourceFile := yamlDirectory+"/swapper-"+port+".yml"
+	sourceFile := YamlDirectory+"/swapper-"+port+".yml"
 	_ = os.Remove(sourceFile)
 
 	// set swapper.yml
 	splitedYaml := strings.Split(swapperYaml, "\nhash: ")
 	swapperYamlStr := splitedYaml[0]
-	hostname, _ := GetHostname()
-	yamlConf, err := ParseSwapperYaml(swapperYaml)
+	hostname, _ := utils.GetHostname()
+	yamlConf, err := yaml.ParseSwapperYaml(swapperYaml)
 	masters = append(yamlConf.Masters, hostname+":"+port)
 	err = WriteSwapperYaml(swapperYamlStr, port, masters, 0)
 	if err != nil {
@@ -277,12 +280,12 @@ func PrepareJoinMaster(port string, join string) error {
 	return nil
 }
 
-func MasterJoin(port string, join string) Response {
+func MasterJoin(port string, join string) response.Response {
 	fmt.Print("Swapper master is running... ")
 
 	pid := os.Getpid()
 	d1 := []byte(strconv.Itoa(pid))
-	_ = ioutil.WriteFile(pidDirectory+"/swapper-master-"+port+".pid", d1, 0644)
+	_ = ioutil.WriteFile(PidDirectory+"/swapper-master-"+port+".pid", d1, 0644)
 
 	go FirstPing(port)
 	// refresh master Loop
@@ -294,10 +297,10 @@ func MasterJoin(port string, join string) Response {
 	masterPort = port
 	h := masterRequestHandler
 	if err := fasthttp.ListenAndServe(":"+port, h); err != nil {
-		return Fail(fmt.Sprintf(errorMessages["master_failed"], err.Error()))
+		return response.Fail(fmt.Sprintf(response.ErrorMessages["master_failed"], err.Error()))
 	}
 
-	return Success("")
+	return response.Success("")
 }
 
 func PingMasterLoop(port string) {
@@ -312,12 +315,12 @@ func RefreshMasterLoop(port string) {
 	RefreshMasterLoop(port)
 }
 
-func MasterStop(argv []string) Response {
+func MasterStop(argv []string) response.Response {
 	_, _ = docopt.ParseArgs(masterStopUsage, argv, "")
 
-	files, err := ioutil.ReadDir(pidDirectory)
+	files, err := ioutil.ReadDir(PidDirectory)
 	if err != nil {
-		return Fail(err.Error())
+		return response.Fail(err.Error())
 	}
 
 	var masters []string
@@ -327,15 +330,15 @@ func MasterStop(argv []string) Response {
 			port := strings.Replace(f.Name(),"swapper-master-","", -1)
 			port = strings.Replace(port,".pid","", -1)
 
-			hostname, _ := GetHostname()
+			hostname, _ := utils.GetHostname()
 			fmt.Print("Stopping Swapper Master ("+hostname+":"+port+")... ")
 
-			dat, err := ioutil.ReadFile(pidDirectory+"/"+f.Name())
+			dat, err := ioutil.ReadFile(PidDirectory+"/"+f.Name())
 			if err == nil {
 				p := string(dat)
 				pid, err := strconv.ParseInt(p, 10, 64)
 				if err != nil {
-					return Fail(err.Error())
+					return response.Fail(err.Error())
 				}
 				proc, err := os.FindProcess(int(pid))
 
@@ -358,12 +361,12 @@ func MasterStop(argv []string) Response {
 					fmt.Print("Already Stopped\n")
 				}
 
-				_ : os.Remove(pidDirectory+"/"+f.Name())
+				_ : os.Remove(PidDirectory+"/"+f.Name())
 			}
 		}
 	}
 	if len(masters) == 0 {
-		return Fail(errorMessages["master_not_running"])
+		return response.Fail(response.ErrorMessages["master_not_running"])
 	}
-	return Success("")
+	return response.Success("")
 }

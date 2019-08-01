@@ -1,7 +1,9 @@
-package main
+package commands
 
 import (
 	"github.com/docopt/docopt-go"
+	"github.com/sachamorard/swapper/response"
+	"github.com/sachamorard/swapper/utils"
 	"io/ioutil"
 	"os"
 	"reflect"
@@ -11,26 +13,26 @@ import (
 
 
 func TestNodeStart(t *testing.T) {
-	_ = os.Remove(yamlDirectory+"/swapper-1207.yml")
+	_ = os.Remove(YamlDirectory+"/swapper-1207.yml")
 	// Stop running master (if exists)
-	oldOut := ShutUpOut()
+	oldOut := utils.ShutUpOut()
 	args := []string{"master", "stop"}
 	MasterStop(args)
-	RestoreOut(oldOut)
+	utils.RestoreOut(oldOut)
 
 	args = []string{"node", "start"}
-	oldOut = ShutUpOut()
-	response := NodeStart(args)
-	RestoreOut(oldOut)
-	if response.Message != errorMessages["need_master_addr"] {
+	oldOut = utils.ShutUpOut()
+	resp := NodeStart(args)
+	utils.RestoreOut(oldOut)
+	if resp.Message != response.ErrorMessages["need_master_addr"] {
 		t.Fail()
 	}
 
 	args = []string{"node", "start", "--join", "localhost"}
-	oldOut = ShutUpOut()
-	response = NodeStart(args)
-	RestoreOut(oldOut)
-	if response.Message != errorMessages["cannot_contact_master"] {
+	oldOut = utils.ShutUpOut()
+	resp = NodeStart(args)
+	utils.RestoreOut(oldOut)
+	if resp.Message != response.ErrorMessages["cannot_contact_master"] {
 		t.Fail()
 	}
 }
@@ -39,9 +41,9 @@ func TestNodeStart(t *testing.T) {
 func TestNodeStart2(t *testing.T) {
 	// Now start master
 	args := []string{"master", "start", "-d"}
-	oldOut := ShutUpOut()
+	oldOut := utils.ShutUpOut()
 	response := MasterStart(args)
-	RestoreOut(oldOut)
+	utils.RestoreOut(oldOut)
 	if response.Code != 0 {
 		t.Fail()
 	}
@@ -49,15 +51,15 @@ func TestNodeStart2(t *testing.T) {
 	time.Sleep(2000 * time.Millisecond)
 
 	args = []string{"node", "start", "--join", "localhost", "-d"}
-	oldOut = ShutUpOut()
+	oldOut = utils.ShutUpOut()
 	response = NodeStart(args)
-	RestoreOut(oldOut)
+	utils.RestoreOut(oldOut)
 
 	time.Sleep(3000 * time.Millisecond)
-	oldOut = ShutUpOut()
+	oldOut = utils.ShutUpOut()
 	args = []string{"node", "stop"}
 	NodeStop(args)
-	RestoreOut(oldOut)
+	utils.RestoreOut(oldOut)
 }
 
 func TestCurlSwapperYaml(t *testing.T) {
@@ -72,12 +74,12 @@ func TestReplaceCommandIfExist(t *testing.T) {
 	if err != nil {
 		t.Fail()
 	}
-	hostname, _ := GetHostname()
+	hostname, _ := utils.GetHostname()
 	if str != hostname+":24224" {
 		t.Fail()
 	}
 
-	input, _ := ioutil.ReadFile("doc/swapper.yml.examples/7.swapper.with.command.yml")
+	input, _ := ioutil.ReadFile("../doc/swapper.yml.examples/7.swapper.with.command.yml")
 	str, err = ReplaceCommandIfExist(string(input))
 	if err != nil {
 		t.Fail()

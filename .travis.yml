@@ -14,6 +14,6 @@ install:
   - go install
 
 script:
-  - go vet
-  - go test -covermode=count .
+  - go vet ./...
+  - go test -covermode=count ./...
 

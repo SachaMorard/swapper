@@ -1,7 +1,12 @@
-package main
+package response
+
+import (
+	"fmt"
+	"os"
+)
 
 var (
-	errorMessages = map[string]string{
+	ErrorMessages = map[string]string{
 		"master_already_started": `
 [ERROR] A swapper master is already running on this machine! To add new master to the ring, execute:
   swapper master start --join <previous-master-hostname>
@@ -124,3 +129,22 @@ Or you can specify its address with following command:
 `,
 	}
 )
+
+
+type Response struct {
+	Code    int
+	Message string
+}
+
+func Success(message string) Response {
+	return Response{Code: 0, Message: message}
+}
+
+func Fail(message string) Response {
+	return Response{Code: 1, Message: message}
+}
+
+func Send(response Response) {
+	fmt.Println(response.Message)
+	os.Exit(response.Code)
+}
