@@ -1,25 +1,4 @@
 steps:
   - name: 'gcr.io/cloud-builders/go'
-    args: ['get', '-u', 'github.com/docopt/docopt-go']
-    env: ['GOPATH=.', 'GOBIN=/workspace/bin']
-
-  - name: 'gcr.io/cloud-builders/go'
-    args: ['get', '-u', 'gopkg.in/yaml.v2']
-    env: ['GOPATH=.', 'GOBIN=/workspace/bin']
-
-  - name: 'gcr.io/cloud-builders/go'
-    args: ['get', '-u', 'github.com/valyala/fasthttp']
-    env: ['GOPATH=.', 'GOBIN=/workspace/bin']
-
-  - name: 'gcr.io/cloud-builders/go'
-    args: ['install']
-    env: ['GOPATH=.', 'GOBIN=/workspace/bin']
-
-  - name: 'gcr.io/cloud-builders/go'
-    args: ['vet']
-    env: ['GOPATH=.', 'GOBIN=/workspace/bin']
-
-  - name: 'gcr.io/cloud-builders/go'
-    args: ['test', '-covermode=count', '-coverprofile=profile.cov', '.']
-    env: ['GOPATH=.', 'GOBIN=/workspace/bin']
+    args: ['test', '-covermode=count', '.']
 

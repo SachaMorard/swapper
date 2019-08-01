@@ -18,7 +18,6 @@ nbproject
 #Specific
 swapper.yml
 swappers.yml
-src-master/vendor
 pkg
 src
 bin

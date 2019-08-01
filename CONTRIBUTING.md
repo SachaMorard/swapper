@@ -5,7 +5,7 @@ Swapper is a simple way to deploy containers, and swap their version.
 ### Requirements
 - Docker
 - make
-- go
+- go (>=1.12)
 ...
 
 #### QuickStart Linux/OSx Dev:
@@ -14,13 +14,8 @@ Swapper is a simple way to deploy containers, and swap their version.
 ## Go wherever you want
 git clone git@github.com:sachamorard/swapper.git
 cd swapper
-make install
-cd bin
-./swapper
+go install
+swapper
 ```
 VOILA !!!
-
-If you wan't, you can add swapper/bin path to your `PATH` environment variable
-
-
 

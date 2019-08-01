@@ -11,8 +11,9 @@ go:
   - tip
 
 install:
-  - make install
+  - go install
 
 script:
-  - make test
+  - go vet
+  - go test -covermode=count .
 
