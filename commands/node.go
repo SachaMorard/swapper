@@ -38,20 +38,21 @@ swapper node start [OPTIONS].
 Start a swapper node
 
 Usage:
- swapper node start [--join <hostnames>] [--detach]
+ swapper node start [--join <hostnames>] [--apply <file>] [--detach]
  swapper node start (-h|--help)
 
 Options:
  -h --help                Show this screen.
  --join=HOSTNAMES         Masters' hostnames (separated by comma)
+ --apply=FILE             Apply a specific yaml configuration file [default: default.yml]
  -d --detach              Run node in background
 
 Examples:
- To start a new node, connected with a local masters:
- $ swapper node start --join master-hostname-1
+ To start a new node, connected with one master, and apply a specific yaml configuration file:
+ $ swapper node start --join master-hostname-1 --apply my.yml
 
- To start a new node, connected with two local masters:
- $ swapper node start --join master-hostname-1,master-hostname-2
+ To start a new node, connected with two masters:
+ $ swapper node start --join master-hostname-1,master-hostname-2 --apply my.yml
 
 `
 	nodeStopUsage = `
@@ -107,8 +108,9 @@ func NodeStart(argv []string) response.Response {
 		masters = append(masters, a)
 	}
 
-	// Get swapper.yml from master(s)
-	yamlConf, err := getYamlConfFromMasters(masters)
+	// Get yaml configuration file from master(s)
+	filename := arguments["--apply"].(string)
+	yamlConf, err := getYamlConfFromMasters(filename, masters)
 	if err != nil {
 		return response.Fail(err.Error())
 	}
@@ -141,9 +143,9 @@ func NodeStart(argv []string) response.Response {
 	currentHash = yamlConf.Hash
 
 	// update regularly
-	fmt.Println("Now, listening changes...")
+	fmt.Println("Now, listening changes on "+filename+" configuration file...")
 	if arguments["--detach"] == false {
-		ListenToMasters(yamlConf)
+		ListenToMasters(filename, yamlConf)
 	} else {
 		joinArg := arguments["--join"]
 		cmd := exec.Command("swapper","node", "start", "--join", joinArg.(string))
@@ -334,18 +336,19 @@ func ReplaceCommandIfExist(input string) (str string, err error) {
 	return str, nil
 }
 
-func ListenToMasters(yamlConf yaml.YamlConf) {
+func ListenToMasters(filename string, yamlConf yaml.YamlConf) {
 	masters := yamlConf.Masters
 	previousYamlConf := yamlConf
 	time.Sleep(3000 * time.Millisecond)
 
-	// Get swapper.yml from master(s)
-	yamlConf, err := getYamlConfFromMasters(masters)
+	// Get yaml configuration file from master(s)
+	// todo filename
+	yamlConf, err := getYamlConfFromMasters(filename, masters)
 	if err != nil {
 		fmt.Println(err.Error())
 		_ = utils.SlackSendError(err.Error(), previousYamlConf)
 		time.Sleep(5000 * time.Millisecond)
-		ListenToMasters(previousYamlConf)
+		ListenToMasters(filename, previousYamlConf)
 		return
 	}
 
@@ -357,7 +360,7 @@ func ListenToMasters(yamlConf yaml.YamlConf) {
 		if err != nil {
 			fmt.Println(err.Error())
 			_ = utils.SlackSendError("Node failed to update\n"+err.Error(), yamlConf)
-			ListenToMasters(yamlConf)
+			ListenToMasters(filename, yamlConf)
 			return
 		}
 
@@ -366,7 +369,7 @@ func ListenToMasters(yamlConf yaml.YamlConf) {
 		if err != nil {
 			fmt.Println(err.Error())
 			_ = utils.SlackSendError("Node failed to update\n"+err.Error(), yamlConf)
-			ListenToMasters(yamlConf)
+			ListenToMasters(filename, yamlConf)
 			return
 		}
 
@@ -375,7 +378,7 @@ func ListenToMasters(yamlConf yaml.YamlConf) {
 		if err != nil {
 			fmt.Println(err.Error())
 			_ = utils.SlackSendError("Node failed to update\n"+err.Error(), yamlConf)
-			ListenToMasters(yamlConf)
+			ListenToMasters(filename, yamlConf)
 			return
 		}
 
@@ -386,7 +389,7 @@ func ListenToMasters(yamlConf yaml.YamlConf) {
 			// todo rollback ?
 			fmt.Println(response.ErrorMessages["proxy_failed"])
 			_ = utils.SlackSendError("Node failed to update\n"+response.ErrorMessages["proxy_failed"], yamlConf)
-			ListenToMasters(yamlConf)
+			ListenToMasters(filename, yamlConf)
 			return
 		}
 
@@ -399,11 +402,11 @@ func ListenToMasters(yamlConf yaml.YamlConf) {
 		out, err := cmd.Output()
 		if err != nil {
 			fmt.Println(err.Error())
-			ListenToMasters(yamlConf)
+			ListenToMasters(filename, yamlConf)
 			return
 		}
 		if strings.TrimSpace(string(out)) == "" {
-			ListenToMasters(yamlConf)
+			ListenToMasters(filename, yamlConf)
 			return
 		}
 		psStr := strings.Split(strings.TrimSpace(string(out)), "\n")
@@ -423,7 +426,7 @@ func ListenToMasters(yamlConf yaml.YamlConf) {
 		out, err = cmd.Output()
 		if err != nil {
 			fmt.Println(err.Error())
-			ListenToMasters(yamlConf)
+			ListenToMasters(filename, yamlConf)
 			return
 		}
 
@@ -433,7 +436,7 @@ func ListenToMasters(yamlConf yaml.YamlConf) {
 		out, err = cmd.Output()
 		if err != nil {
 			fmt.Println(err.Error())
-			ListenToMasters(yamlConf)
+			ListenToMasters(filename, yamlConf)
 			return
 		}
 
@@ -442,7 +445,7 @@ func ListenToMasters(yamlConf yaml.YamlConf) {
 
 	}
 
-	ListenToMasters(yamlConf)
+	ListenToMasters(filename, yamlConf)
 }
 
 func NodeStop(argv []string) response.Response {

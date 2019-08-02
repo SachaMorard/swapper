@@ -7,13 +7,20 @@ import (
 	"io/ioutil"
 	"os"
 	"reflect"
+	"regexp"
 	"testing"
 	"time"
 )
 
 
 func TestNodeStart(t *testing.T) {
-	_ = os.Remove(YamlDirectory+"/swapper-1207.yml")
+	files, _ := ioutil.ReadDir(YamlDirectory)
+	var valid = regexp.MustCompile(`\.yml_[0-9]+$`)
+	for _, f := range files {
+		if valid.MatchString(string(f.Name())) {
+			_ = os.Remove(YamlDirectory+"/"+f.Name())
+		}
+	}
 	// Stop running master (if exists)
 	oldOut := utils.ShutUpOut()
 	args := []string{"master", "stop"}
@@ -62,8 +69,8 @@ func TestNodeStart2(t *testing.T) {
 	utils.RestoreOut(oldOut)
 }
 
-func TestCurlSwapperYaml(t *testing.T) {
-	swapperYaml := CurlSwapperYaml("localhost:1207")
+func TestCurlYaml(t *testing.T) {
+	swapperYaml := CurlYaml("default.yml", "localhost:1207")
 	if swapperYaml == "" {
 		t.Fail()
 	}
@@ -79,7 +86,7 @@ func TestReplaceCommandIfExist(t *testing.T) {
 		t.Fail()
 	}
 
-	input, _ := ioutil.ReadFile("../doc/swapper.yml.examples/7.swapper.with.command.yml")
+	input, _ := ioutil.ReadFile("../doc/yml-examples/7.with.command.yml")
 	str, err = ReplaceCommandIfExist(string(input))
 	if err != nil {
 		t.Fail()
@@ -91,6 +98,7 @@ func TestNodeStartArgs(t *testing.T) {
 	arguments := NodeStartArgs(argv)
 	args := docopt.Opts{
 		"--join":    nil,
+		"--apply":   "default.yml",
 		"--detach":  false,
 		"--help":    false,
 		"start":     true,
@@ -105,6 +113,7 @@ func TestNodeStartArgs(t *testing.T) {
 	arguments = NodeStartArgs(argv)
 	args = docopt.Opts{
 		"--join":    "localhost",
+		"--apply":   "default.yml",
 		"--detach":  false,
 		"--help":    false,
 		"start":     true,
@@ -119,6 +128,7 @@ func TestNodeStartArgs(t *testing.T) {
 	arguments = NodeStartArgs(argv)
 	args = docopt.Opts{
 		"--join":    "localhost",
+		"--apply":   "default.yml",
 		"--detach":  true,
 		"--help":    false,
 		"start":     true,
@@ -133,6 +143,22 @@ func TestNodeStartArgs(t *testing.T) {
 	arguments = NodeStartArgs(argv)
 	args = docopt.Opts{
 		"--join":    "localhost",
+		"--apply":   "default.yml",
+		"--detach":  true,
+		"--help":    false,
+		"start":     true,
+		"node":      true,
+	}
+	eq = reflect.DeepEqual(arguments, args)
+	if !eq {
+		t.Fail()
+	}
+
+	argv = []string{"node", "start", "--join", "localhost", "--detach", "--apply", "ok.yml"}
+	arguments = NodeStartArgs(argv)
+	args = docopt.Opts{
+		"--join":    "localhost",
+		"--apply":   "ok.yml",
 		"--detach":  true,
 		"--help":    false,
 		"start":     true,

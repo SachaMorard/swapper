@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"github.com/sachamorard/swapper/response"
 	"github.com/sachamorard/swapper/utils"
+	"io/ioutil"
 	"os"
 	"reflect"
+	"regexp"
 	"testing"
 	"time"
 
@@ -13,7 +15,13 @@ import (
 )
 
 func TestMasterStart(t *testing.T) {
-	_ = os.Remove(YamlDirectory+"/swapper-1207.yml")
+	files, _ := ioutil.ReadDir(YamlDirectory)
+	var valid = regexp.MustCompile(`\.yml_[0-9]+$`)
+	for _, f := range files {
+		if valid.MatchString(string(f.Name())) {
+			_ = os.Remove(YamlDirectory+"/"+f.Name())
+		}
+	}
 	// Stop running master (if exists)
 	oldOut := utils.ShutUpOut()
 	args := []string{"master", "stop"}

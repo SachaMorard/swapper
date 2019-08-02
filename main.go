@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/sachamorard/swapper/commands"
 	"github.com/sachamorard/swapper/response"
 	"os"
@@ -50,32 +51,35 @@ func main() {
 		arg2 = "help"
 	}
 
+	var response response.Response
 	switch arg {
 	case "node":
 		switch arg2 {
 		case "start":
-			response.Send(commands.NodeStart(os.Args[1:]))
+			response = commands.NodeStart(os.Args[1:])
 		case "stop":
-			response.Send(commands.NodeStop(os.Args[1:]))
+			response = commands.NodeStop(os.Args[1:])
 		default:
-			response.Send(HelpNode())
+			response = HelpNode()
 		}
 	case "master":
 		switch arg2 {
 		case "start":
-			response.Send(commands.MasterStart(os.Args[1:]))
+			response = commands.MasterStart(os.Args[1:])
 		case "stop":
-			response.Send(commands.MasterStop(os.Args[1:]))
+			response = commands.MasterStop(os.Args[1:])
 		default:
-			response.Send(HelpMaster())
+			response = HelpMaster()
 		}
 	case "deploy":
-		response.Send(commands.Deploy(os.Args[1:]))
+		response = commands.Deploy(os.Args[1:])
 	case "status":
-		response.Send(commands.Status())
+		response = commands.Status()
 	case "version":
-		response.Send(commands.Version())
+		response = commands.Version()
 	default:
-		response.Send(Help())
+		response = Help()
 	}
+	fmt.Println(response.Message)
+	os.Exit(response.Code)
 }

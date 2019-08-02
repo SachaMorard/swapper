@@ -1,10 +1,5 @@
 package response
 
-import (
-	"fmt"
-	"os"
-)
-
 var (
 	ErrorMessages = map[string]string{
 		"master_already_started": `
@@ -75,6 +70,10 @@ Or you can specify its address with following command:
 [ERROR] Your Yaml file is invalid
 `,
 
+		"yaml_name": `
+[ERROR] Your Yaml file has to end with .yml extension
+`,
+
 		"haproxy_conf_empty": `
 [ERROR] Swapper Proxy's conf is empty
 `,
@@ -142,9 +141,4 @@ func Success(message string) Response {
 
 func Fail(message string) Response {
 	return Response{Code: 1, Message: message}
-}
-
-func Send(response Response) {
-	fmt.Println(response.Message)
-	os.Exit(response.Code)
 }

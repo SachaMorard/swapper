@@ -26,12 +26,12 @@ func TestCommand(t *testing.T) {
 }
 
 func TestFileExists(t *testing.T) {
-	exists := FileExists("../doc/swapper.example.yml")
+	exists := FileExists("../doc/example.yml")
 	if exists == false {
 		t.Fail()
 	}
 
-	exists = FileExists("../doc/swappers.example.yml")
+	exists = FileExists("../doc/ssssexample.yml")
 	if exists == true {
 		t.Fail()
 	}

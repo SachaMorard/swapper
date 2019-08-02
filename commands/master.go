@@ -10,6 +10,7 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
@@ -158,27 +159,40 @@ func PrepareNewMaster(port string) error {
 		return errors.New(response.ErrorMessages["master_already_started"])
 	}
 
-	// get the old one swapper.yml if exists
-	sourceFile := YamlDirectory+"/swapper-"+port+".yml"
-	swapperYaml := firstYaml
-	forceTime := int64(0)
-	if _, err := os.Stat(sourceFile); err == nil {
-		oldYaml, ioErr := ioutil.ReadFile(sourceFile)
-		if ioErr == nil {
-			yamlConf, err := yaml.ParseSwapperYaml(string(oldYaml))
-			if err != nil {
-				return err
+	// get the old yamlConfs if exist
+	files, err = ioutil.ReadDir(YamlDirectory)
+	if err != nil {
+		return err
+	}
+	var existingYamlConf []string
+	var valid = regexp.MustCompile(`\.yml_` + port + `$`)
+	for _, f := range files {
+		if valid.MatchString(f.Name()) {
+			sourceFile := YamlDirectory+"/"+f.Name()
+			oldYaml, ioErr := ioutil.ReadFile(sourceFile)
+			if ioErr == nil {
+				yamlConf, err := yaml.ParseSwapperYaml(string(oldYaml))
+				if err != nil {
+					return err
+				}
+				forceTime := yamlConf.Time
+				splittedOldYaml := strings.Split(string(oldYaml), "\nhash: ")
+				swapperYaml := splittedOldYaml[0]
+				filename := strings.Replace(f.Name(), "_"+port, "", -1)
+				err = WriteSwapperYaml(filename, swapperYaml, port, []string{}, forceTime)
+				existingYamlConf = append(existingYamlConf, f.Name())
 			}
-			forceTime = yamlConf.Time
-			splittedOldYaml := strings.Split(string(oldYaml), "\nhash: ")
-			swapperYaml = splittedOldYaml[0]
 		}
 	}
 
-	// set swapper.yml
-	err = WriteSwapperYaml(swapperYaml, port, []string{}, forceTime)
-	if err != nil {
-		return err
+	// if no (valid) file is in YamlDirectory
+	if len(existingYamlConf) == 0 || utils.FileExists(YamlDirectory+"/default.yml_"+port) == false {
+		// set default.yml
+		forceTime := int64(0)
+		err = WriteSwapperYaml("default.yml", baseYaml, port, []string{}, forceTime)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -250,31 +264,44 @@ func PrepareJoinMaster(port string, join string) error {
 	rand.Seed(time.Now().UnixNano())
 	rand.Shuffle(len(masters), func(i, j int) { masters[i], masters[j] = masters[j], masters[i] })
 
-	// Get swapper.yml from master(s)
-	swapperYaml := ""
+	// remove old yamls
+	files, err := ioutil.ReadDir(YamlDirectory)
+	if err != nil {
+		return err
+	}
+	var valid = regexp.MustCompile(`\.yml_` + port + `$`)
+	for _, f := range files {
+		if valid.MatchString(f.Name()) {
+			sourceFile := YamlDirectory+"/"+f.Name()
+			_ = os.Remove(sourceFile)
+		}
+	}
+
+	// Check if masters are responding and import all yamls
+	var conf Conf
 	for _, master := range masters {
-		swapperYaml = CurlSwapperYaml(master)
-		if swapperYaml != "" {
+		conf = CurlRoot(master)
+		if len(conf.Yamls) != 0 {
+			for _, filename := range conf.Yamls {
+				swapperYaml := CurlYaml(filename, master)
+				if swapperYaml != "" {
+					// set yaml conf
+					splitedYaml := strings.Split(swapperYaml, "\nhash: ")
+					swapperYamlStr := splitedYaml[0]
+					hostname, _ := utils.GetHostname()
+					yamlConf, err := yaml.ParseSwapperYaml(swapperYaml)
+					masters = append(yamlConf.Masters, hostname+":"+port)
+					err = WriteSwapperYaml(filename, swapperYamlStr, port, masters, 0)
+					if err != nil {
+						return err
+					}
+				}
+			}
 			break
 		}
 	}
-	if swapperYaml == "" {
+	if len(conf.Yamls) == 0 {
 		return errors.New(response.ErrorMessages["cannot_contact_master"])
-	}
-
-	// remove old swapper.yml
-	sourceFile := YamlDirectory+"/swapper-"+port+".yml"
-	_ = os.Remove(sourceFile)
-
-	// set swapper.yml
-	splitedYaml := strings.Split(swapperYaml, "\nhash: ")
-	swapperYamlStr := splitedYaml[0]
-	hostname, _ := utils.GetHostname()
-	yamlConf, err := yaml.ParseSwapperYaml(swapperYaml)
-	masters = append(yamlConf.Masters, hostname+":"+port)
-	err = WriteSwapperYaml(swapperYamlStr, port, masters, 0)
-	if err != nil {
-		return err
 	}
 
 	return nil
@@ -311,7 +338,7 @@ func PingMasterLoop(port string) {
 
 func RefreshMasterLoop(port string) {
 	time.Sleep(5000 * time.Millisecond)
-	RefreshMaster(port)
+	_ = RefreshMaster(port)
 	RefreshMasterLoop(port)
 }
 

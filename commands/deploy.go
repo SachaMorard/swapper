@@ -9,6 +9,8 @@ import (
 	"github.com/sachamorard/swapper/yaml"
 	"io/ioutil"
 	"net/http"
+	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -27,16 +29,16 @@ Usage:
 
 Options:
  -h --help                 Show this screen.
- -f NAME --file=NAME       Swapper yml config file [default: swapper.yml]
- --var VAR=VALUE           To inject variable into swapper.yml file
+ -f NAME --file=NAME       Swapper yml config file [default: default.yml]
+ --var VAR=VALUE           To inject variable into yaml file
  --master=HOSTNAME         Master's hostname [default: {{hostname}}]
 
 Examples:
- To deploy new swapper configuration and start swapping containers, create a new version of swapper.yml, then:
- $ swapper deploy --file swapper.yml
+ To deploy new swapper configuration and start swapping containers, create a new version of your yaml file, then:
+ $ swapper deploy --file my.yml
 
- To deploy new dynamic swapper configuration and start swapping containers, create a new version of swapper.yml with variables in it, then:
- $ swapper deploy --file swapper.yml --var ENV=prod --var TAG=1.0.2
+ To deploy new dynamic swapper configuration and start swapping containers, create a new version of your yaml file with variables in it, then:
+ $ swapper deploy --file my.yml --var ENV=prod --var TAG=1.0.2
 `
 )
 
@@ -86,29 +88,35 @@ func Deploy(argv []string) response.Response {
 		masterHostname = masterHostname + ":1207"
 	}
 
-	swapperYml := CurlSwapperYaml(masterHostname)
-	if swapperYml == "" {
+	conf := CurlRoot(masterHostname)
+	if len(conf.Yamls) == 0 {
 		return response.Fail(fmt.Sprintf(response.ErrorMessages["bad_master_addr"], masterHostname))
 	}
 
 	masterSplit := strings.Split(masterHostname, ":")
 	port := masterSplit[1]
 
-	return DeployFile(cleanYaml, port, yamlConf)
+	fileInfo, _ := os.Stat(file)
+	var valid = regexp.MustCompile(`\.yml$`)
+	if valid.MatchString(fileInfo.Name()) == false {
+		return response.Fail(response.ErrorMessages["yaml_name"])
+	}
+
+	return DeployFile(fileInfo.Name(), cleanYaml, port, yamlConf)
 }
 
-func DeployFile(cleanYaml string, port string, yamlConf yaml.YamlConf) response.Response {
-	err := DeployReq(cleanYaml, port)
+func DeployFile(filename string, cleanYaml string, port string, yamlConf yaml.YamlConf) response.Response {
+	err := DeployReq(filename, cleanYaml, port)
 	if err != nil {
 		_ = utils.SlackSendError("Deployment failed\n"+err.Error(), yamlConf)
 		return response.Fail(err.Error())
 	}
-	_ = utils.SlackSendSuccess("Deployment succeed", yamlConf)
-	return response.Success("\n>> Deployment succeed\n")
+	_ = utils.SlackSendSuccess(filename+" deployment succeed", yamlConf)
+	return response.Success("\n>> "+filename+" deployment succeed\n")
 }
 
-func DeployReq(cleanYaml string, port string) (err error) {
-	req, err := http.NewRequest(http.MethodPost, "http://localhost:"+port+"/swapper.yml", bytes.NewBuffer([]byte(cleanYaml)))
+func DeployReq(filename string, cleanYaml string, port string) (err error) {
+	req, err := http.NewRequest(http.MethodPost, "http://localhost:"+port+"/"+filename, bytes.NewBuffer([]byte(cleanYaml)))
 	if err != nil {
 		return errors.New(fmt.Sprintf(response.ErrorMessages["request_failed"], err))
 	}

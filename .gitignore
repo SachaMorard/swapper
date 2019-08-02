@@ -17,9 +17,5 @@ nbproject
 
 #Specific
 swapper.yml
-swappers.yml
-pkg
-src
-bin
-profile.cov
+default.yml
 release

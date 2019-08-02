@@ -14,7 +14,7 @@ import (
 
 func TestCreateHaproxyConf(t *testing.T) {
 	vars := []string{"NGINXTAG=1.17.0", "ENV=prod"}
-	cleanYaml, err := yaml.PrepareSwapperYaml("../yaml/tests/v1/swapper.valid.1.yml", vars)
+	cleanYaml, err := yaml.PrepareSwapperYaml("../yaml/tests/v1/valid.1.yml", vars)
 	if err != nil {
 		t.Fail()
 	}
@@ -203,12 +203,12 @@ backend backend_443_443
 }
 
 func TestWriteSwapperYaml(t *testing.T) {
-	err := WriteSwapperYaml("jklfd fdsf: fds", "1207", []string{"ok", "c", "a", "c"}, 0)
+	err := WriteSwapperYaml("default.yml","jklfd fdsf: fds", "1207", []string{"ok", "c", "a", "c"}, 0)
 	if err != nil && err.Error() != response.ErrorMessages["yaml_version"] {
 		t.Fail()
 	}
 
-	err = WriteSwapperYaml(firstYaml, "1207", []string{"ok", "c", "a", "c"}, 0)
+	err = WriteSwapperYaml("default.yml", baseYaml, "1207", []string{"ok", "c", "a", "c"}, 0)
 	if err != nil {
 		t.Fail()
 	}
@@ -254,7 +254,7 @@ func TestGetQuorum(t *testing.T) {
 func TestRefreshMaster(t *testing.T) {
 
 	port := "1111"
-	sourceFile := YamlDirectory+"/swapper-"+port+".yml"
+	sourceFile := YamlDirectory+"/default.yml_"+port
 	swapperYaml := `
 version: "1"
 
@@ -274,8 +274,8 @@ masters:
 `
 	_ = ioutil.WriteFile(sourceFile, []byte(swapperYaml), 0644)
 
-	quorum := RefreshMaster(port)
-	if len(quorum) != 3 {
+	err := RefreshMaster(port)
+	if err != nil {
 		t.Fail()
 	}
 
@@ -284,7 +284,7 @@ masters:
 
 func TestPingMasters(t *testing.T) {
 	port := "1111"
-	sourceFile := YamlDirectory+"/swapper-"+port+".yml"
+	sourceFile := YamlDirectory+"/default.yml_"+port
 	swapperYaml := `
 version: "1"
 
@@ -314,7 +314,7 @@ masters:
 
 func TestAddMaster(t *testing.T) {
 	port := "1111"
-	sourceFile := YamlDirectory+"/swapper-"+port+".yml"
+	sourceFile := YamlDirectory+"/default.yml_"+port
 	swapperYaml := `
 version: "1"
 
