@@ -1,7 +1,8 @@
 # Swapper 
 
-Swapper is a simple way to deploy containers, on your existing infrastructure, and swap their version on the fly without any interruption.
+Swapper is a simple solution to run containers, on your existing infrastructure, and swap their version on the fly without any interruption.
 
+Swapper is fast, distributed, and **SIMPLE**!
 
 2 kind of swapper exist:
 - masters: those who store and share the configuration files
