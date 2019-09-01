@@ -342,7 +342,6 @@ func ListenToMasters(filename string, yamlConf yaml.YamlConf) {
 	time.Sleep(3000 * time.Millisecond)
 
 	// Get yaml configuration file from master(s)
-	// todo filename
 	yamlConf, err := getYamlConfFromMasters(filename, masters)
 	if err != nil {
 		fmt.Println(err.Error())
