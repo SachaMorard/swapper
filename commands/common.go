@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
@@ -19,6 +20,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"cloud.google.com/go/storage"
 )
 
 var (
@@ -105,7 +108,7 @@ func getYamlConfFromMasters(filename string, masters []string) (yamlConf yaml.Ya
 
 	// Get yaml file from master(s)
 	for _, master := range masters {
-		swapperYaml := CurlYaml(filename, master)
+		swapperYaml := GetYaml(filename, master)
 		if swapperYaml != "" {
 			yamlConf, err := yaml.ParseSwapperYaml(swapperYaml)
 			return yamlConf, err
@@ -114,7 +117,12 @@ func getYamlConfFromMasters(filename string, masters []string) (yamlConf yaml.Ya
 	return yamlConf, errors.New(response.ErrorMessages["cannot_contact_master"])
 }
 
-func CurlYaml(filename string, hostname string) string {
+func GetYaml(filename string, hostname string) string {
+
+	if strings.Contains(hostname, "gs://") {
+		return GetYamlFromGCS(filename, hostname)
+	}
+
 	resp, err := http.Get("http://"+hostname+"/"+filename)
 	if err != nil {
 		return ""
@@ -129,7 +137,38 @@ func CurlYaml(filename string, hostname string) string {
 	}
 }
 
-func CurlRoot(hostname string) (val Conf) {
+func GetYamlFromGCS(filename string, hostname string) string {
+
+	ctx := context.Background()
+
+	// Creates a client.
+	client, errClient := storage.NewClient(ctx)
+	if errClient != nil {
+		return ""
+	}
+
+	// Set name of the new bucket.
+	hostname = strings.Replace(hostname, "gs://", "", -1)
+	bucketNames := strings.Split(hostname, "/")
+	if len(bucketNames) != 1 {
+		return ""
+	}
+
+	bucketName := bucketNames[0]
+	rc, err := client.Bucket(bucketName).Object(filename).NewReader(ctx)
+	if err != nil {
+		return ""
+	}
+	defer rc.Close()
+
+	data, err := ioutil.ReadAll(rc)
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
+func GetMastersConf(hostname string) (val Conf) {
 	resp, err := http.Get("http://"+hostname+"/")
 	if err != nil {
 		return val
@@ -258,10 +297,10 @@ func RefreshMaster(currentPort string) (err error) {
 
 	quorum := GetQuorum(defaultYamlConf.Masters, currentPort)
 	for _, master := range quorum {
-		conf := CurlRoot(master)
+		conf := GetMastersConf(master)
 		if len(conf.Yamls) != 0 {
 			for _, filename := range conf.Yamls {
-				distantYamlStr := CurlYaml(filename, master)
+				distantYamlStr := GetYaml(filename, master)
 				if distantYamlStr != "" {
 					sourceFile := YamlDirectory+"/"+filename+"_"+currentPort
 					swapperYaml, err := ioutil.ReadFile(sourceFile)

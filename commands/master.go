@@ -220,6 +220,11 @@ func NewMaster(port string) response.Response {
 }
 
 func PrepareJoinMaster(port string, join string) error {
+	// you can only join local masters
+	if strings.Contains(join, "gs://") {
+		return errors.New(response.ErrorMessages["cannot_contact_master"])
+	}
+
 	// check if a master is already running with this port
 	pidFile := PidDirectory+"/swapper-master-"+port+".pid"
 	dat, err := ioutil.ReadFile(pidFile)
@@ -280,10 +285,10 @@ func PrepareJoinMaster(port string, join string) error {
 	// Check if masters are responding and import all yamls
 	var conf Conf
 	for _, master := range masters {
-		conf = CurlRoot(master)
+		conf = GetMastersConf(master)
 		if len(conf.Yamls) != 0 {
 			for _, filename := range conf.Yamls {
-				swapperYaml := CurlYaml(filename, master)
+				swapperYaml := GetYaml(filename, master)
 				if swapperYaml != "" {
 					// set yaml conf
 					splitedYaml := strings.Split(swapperYaml, "\nhash: ")

@@ -7,7 +7,6 @@ services:
     containers:
       - image: nginx
         tag: ${TAG}
-        port: 80
         environment:
           ENV: ${ENV}
 

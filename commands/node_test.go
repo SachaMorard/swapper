@@ -69,8 +69,8 @@ func TestNodeStart2(t *testing.T) {
 	utils.RestoreOut(oldOut)
 }
 
-func TestCurlYaml(t *testing.T) {
-	swapperYaml := CurlYaml("default.yml", "localhost:1207")
+func TestGetYaml(t *testing.T) {
+	swapperYaml := GetYaml("default.yml", "localhost:1207")
 	if swapperYaml == "" {
 		t.Fail()
 	}

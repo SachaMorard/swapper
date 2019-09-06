@@ -8,6 +8,8 @@ Swapper is fast, distributed, and **SIMPLE**!
 - masters: those who store and share the configuration files
 - nodes: those who run the containers described on the configuration file
 
+![Swapper](doc/swapper.jpg?raw=true "Swapper")
+
 ## Installation
 
 Run this command to download the current stable release of Swapper:
@@ -31,7 +33,9 @@ For example:
 
 ## How to run swapper
 
-### Start Master(s)
+[To use Google Cloud Storage as master](https://github.com/SachaMorard/swapper/tree/master/doc/deployWithGCS.md)
+
+### Or you can run masters on your own servers
 
 First, connect to a server (with swapper installed) and start a master:
 ```bash

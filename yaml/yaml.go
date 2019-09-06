@@ -58,6 +58,13 @@ type YamlConf struct {
 	Time int64
 	Masters []string
 	Slack Slack
+	Master Master
+}
+
+type Master struct {
+	Driver string
+	ProjectId string
+	CredentialsFile string
 }
 
 func PrepareSwapperYaml(sourceFile string, vars []string) (cleanYaml string, err error) {
@@ -159,6 +166,27 @@ func InterpretV1(swapperYaml *Yaml) (yamlConf YamlConf, err error) {
 		masters = append(masters, master.(string))
 	}
 	yamlConf.Masters = masters
+
+	var master Master
+	master.Driver = "local"
+	driver, errDriver := swapperYaml.GetPath("master", "driver").String()
+	if errDriver == nil && driver != "" {
+		if driver == "gcp" {
+			master.Driver = "gcp"
+
+			// mandatory fields
+			master.ProjectId, _ = swapperYaml.GetPath("master", "project-id").String()
+			if master.ProjectId == "" {
+				return yamlConf, errors.New(fmt.Sprintf(response.ErrorMessages["master_field_needed"], "project-id"))
+			}
+
+			credentialsFile, _ := swapperYaml.GetPath("master", "credentials-file").String()
+			if credentialsFile != "" {
+				master.CredentialsFile = credentialsFile
+			}
+		}
+	}
+	yamlConf.Master = master
 
 	slackHook, _ := swapperYaml.GetPath("slack", "webhook-url").String()
 	slackChannel, _ := swapperYaml.GetPath("slack", "channel").String()

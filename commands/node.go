@@ -341,6 +341,11 @@ func ListenToMasters(filename string, yamlConf yaml.YamlConf) {
 	previousYamlConf := yamlConf
 	time.Sleep(3000 * time.Millisecond)
 
+	// If master driver = gcp, force master hostname
+	if yamlConf.Master.Driver == "gcp" {
+		masters = []string{"gs://swapper-master-"+yamlConf.Master.ProjectId}
+	}
+
 	// Get yaml configuration file from master(s)
 	yamlConf, err := getYamlConfFromMasters(filename, masters)
 	if err != nil {

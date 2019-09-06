@@ -49,6 +49,10 @@ var (
   swapper master start
 `,
 
+		"master_field_needed": `
+[ERROR] master.%s field is required or invalid
+`,
+
 		"bad_master_addr": `
 [ERROR] Swapper master is not running, or its hostname "%s" is not responding. 
 Start master with:
