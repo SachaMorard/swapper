@@ -140,4 +140,4 @@ services:
 
 ### More?
 
-To know more about the swapper capability, you can inspect [the yaml configuration file examples](https://github.com/SachaMorard/swapper/tree/master/doc/swapper.yml.examples)
+To know more about the swapper capability, you can inspect [the yaml configuration file examples](doc/yml-examples)
