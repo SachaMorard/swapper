@@ -1,9 +1,12 @@
-package main
+package yaml
 
 import (
 	"errors"
 	"fmt"
+	"github.com/sachamorard/swapper/response"
 	"gopkg.in/yaml.v2"
+	"io/ioutil"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -55,6 +58,75 @@ type YamlConf struct {
 	Time int64
 	Masters []string
 	Slack Slack
+	Master Master
+}
+
+type Master struct {
+	Driver string
+	ProjectId string
+	CredentialsFile string
+}
+
+func PrepareSwapperYaml(sourceFile string, vars []string) (cleanYaml string, err error) {
+
+	input, ioErr := ioutil.ReadFile(sourceFile)
+	if ioErr != nil {
+		return cleanYaml, errors.New(fmt.Sprintf(response.ErrorMessages["file_not_exist"], sourceFile))
+	}
+
+	// Unmarshal Yaml to remove comments and clean it
+	var val interface{}
+	errUnmarshal := yaml.Unmarshal([]byte(string(input)), &val)
+	if errUnmarshal != nil {
+		return cleanYaml, errors.New(response.ErrorMessages["yaml_invalid"])
+	}
+
+	d, errMarshal := yaml.Marshal(&val)
+	if errMarshal != nil {
+		return cleanYaml, errors.New(response.ErrorMessages["yaml_invalid"])
+	}
+	cleanYaml = string(d)
+
+	// Transform vars strings to map
+	varMap := make(map[string]string)
+	var keyValue []string
+	for _, e := range vars {
+		if e != "" {
+			keyValue = strings.Split(e, "=")
+			varMap[keyValue[0]] = keyValue[1]
+		}
+	}
+
+	// Replace variables if exist
+	re := regexp.MustCompile(`\${[a-zA-Z0-9_-]+}`)
+	matches := re.FindAllString(cleanYaml, -1)
+	var varname string
+	for _, p := range matches {
+		varname = strings.Replace(strings.Replace(p, "${", "", 1), "}", "", -1)
+		if varMap[varname] != "" {
+			cleanYaml = strings.Replace(cleanYaml, p, varMap[varname], -1)
+		}
+	}
+
+	// Check whether variables still need to be defined
+	matches = re.FindAllString(cleanYaml, -1)
+	if len(matches) > 0 {
+		varnames := ""
+		examples := ""
+		alreadyDone := map[string]bool{}
+		for _, p := range matches {
+
+			varname = strings.Replace(strings.Replace(p, "${", "", 1), "}", "", -1)
+			if alreadyDone[varname] != true {
+				varnames = varnames + varname + " "
+				examples = examples + "--var " + varname + "=<value> "
+				alreadyDone[varname] = true
+			}
+		}
+		return cleanYaml, errors.New(fmt.Sprintf(response.ErrorMessages["var_missing"], strings.TrimSpace(varnames), strings.TrimSpace(examples)))
+	}
+
+	return cleanYaml, err
 }
 
 func ParseSwapperYaml(yamlStr string) (yamlConf YamlConf, err error) {
@@ -62,7 +134,7 @@ func ParseSwapperYaml(yamlStr string) (yamlConf YamlConf, err error) {
 	err = yaml.Unmarshal([]byte(yamlStr), &val)
 	swapperYaml := &Yaml{val}
 	if err != nil {
-		return yamlConf, errors.New(errorMessages["yaml_invalid"])
+		return yamlConf, errors.New(response.ErrorMessages["yaml_invalid"])
 	}
 
 	yamlVersion, _ := swapperYaml.Get("version").String()
@@ -70,7 +142,7 @@ func ParseSwapperYaml(yamlStr string) (yamlConf YamlConf, err error) {
 		yamlConf, err = InterpretV1(swapperYaml)
 		return yamlConf, err
 	}
-	return yamlConf, errors.New(errorMessages["yaml_version"])
+	return yamlConf, errors.New(response.ErrorMessages["yaml_version"])
 }
 
 func InterpretV1(swapperYaml *Yaml) (yamlConf YamlConf, err error) {
@@ -94,6 +166,27 @@ func InterpretV1(swapperYaml *Yaml) (yamlConf YamlConf, err error) {
 		masters = append(masters, master.(string))
 	}
 	yamlConf.Masters = masters
+
+	var master Master
+	master.Driver = "local"
+	driver, errDriver := swapperYaml.GetPath("master", "driver").String()
+	if errDriver == nil && driver != "" {
+		if driver == "gcp" {
+			master.Driver = "gcp"
+
+			// mandatory fields
+			master.ProjectId, _ = swapperYaml.GetPath("master", "project-id").String()
+			if master.ProjectId == "" {
+				return yamlConf, errors.New(fmt.Sprintf(response.ErrorMessages["master_field_needed"], "project-id"))
+			}
+
+			credentialsFile, _ := swapperYaml.GetPath("master", "credentials-file").String()
+			if credentialsFile != "" {
+				master.CredentialsFile = credentialsFile
+			}
+		}
+	}
+	yamlConf.Master = master
 
 	slackHook, _ := swapperYaml.GetPath("slack", "webhook-url").String()
 	slackChannel, _ := swapperYaml.GetPath("slack", "channel").String()
@@ -126,13 +219,13 @@ func InterpretV1(swapperYaml *Yaml) (yamlConf YamlConf, err error) {
 				// image
 				Container.Image, _ = containerYml.Get("image").String()
 				if Container.Image == "" {
-					return yamlConf, errors.New(fmt.Sprintf(errorMessages["service_field_needed"], "image", serviceName))
+					return yamlConf, errors.New(fmt.Sprintf(response.ErrorMessages["service_field_needed"], "image", serviceName))
 				}
 
 				// tag
 				Container.Tag, _ = containerYml.Get("tag").String()
 				if Container.Tag == "" {
-					return yamlConf, errors.New(fmt.Sprintf(errorMessages["service_field_needed"], "tag", serviceName))
+					return yamlConf, errors.New(fmt.Sprintf(response.ErrorMessages["service_field_needed"], "tag", serviceName))
 				}
 
 				// weight
@@ -175,7 +268,7 @@ func InterpretV1(swapperYaml *Yaml) (yamlConf YamlConf, err error) {
 						frontendPort, _ := strconv.Atoi(splittedPort[0])
 						containerPort, _ := strconv.Atoi(splittedPort[1])
 						if frontendPort == 0 || containerPort == 0 {
-							return yamlConf, errors.New(fmt.Sprintf(errorMessages["ports_invalid"], portStr))
+							return yamlConf, errors.New(fmt.Sprintf(response.ErrorMessages["ports_invalid"], portStr))
 						}
 						servicePorts = append(servicePorts, portStr)
 						checkFrontendPort[splittedPort[0]] = true
@@ -189,15 +282,15 @@ func InterpretV1(swapperYaml *Yaml) (yamlConf YamlConf, err error) {
 						Front.Containers = Service.Containers
 						frontends = append(frontends, Front)
 					} else {
-						return yamlConf, errors.New(fmt.Sprintf(errorMessages["port_conflict"], splittedPort[0]))
+						return yamlConf, errors.New(fmt.Sprintf(response.ErrorMessages["port_conflict"], splittedPort[0]))
 					}
 
 				} else {
-					return yamlConf, errors.New(errorMessages["ports_empty"])
+					return yamlConf, errors.New(response.ErrorMessages["ports_empty"])
 				}
 			}
 		} else {
-			return yamlConf, errors.New(fmt.Sprintf(errorMessages["service_field_needed"], "ports", serviceName))
+			return yamlConf, errors.New(fmt.Sprintf(response.ErrorMessages["service_field_needed"], "ports", serviceName))
 		}
 		Service.Ports = servicePorts
 	}

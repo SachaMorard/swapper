@@ -26,9 +26,9 @@ install: ## go install
 	go install
 
 test: ## launch unit test
-	go vet
-	go test -covermode=count .
+	go vet ./...
+	go test -covermode=count ./...
 
 ctest: ## launch unit test
-	go vet
-	go test -run ${RUN}
+	go vet ./...
+	go test -run ${RUN} ./...

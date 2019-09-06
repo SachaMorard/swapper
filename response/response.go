@@ -1,7 +1,7 @@
-package main
+package response
 
 var (
-	errorMessages = map[string]string{
+	ErrorMessages = map[string]string{
 		"master_already_started": `
 [ERROR] A swapper master is already running on this machine! To add new master to the ring, execute:
   swapper master start --join <previous-master-hostname>
@@ -49,6 +49,10 @@ var (
   swapper master start
 `,
 
+		"master_field_needed": `
+[ERROR] master.%s field is required or invalid
+`,
+
 		"bad_master_addr": `
 [ERROR] Swapper master is not running, or its hostname "%s" is not responding. 
 Start master with:
@@ -68,6 +72,10 @@ Or you can specify its address with following command:
 
 		"yaml_invalid": `
 [ERROR] Your Yaml file is invalid
+`,
+
+		"yaml_name": `
+[ERROR] Your Yaml file has to end with .yml extension
 `,
 
 		"haproxy_conf_empty": `
@@ -124,3 +132,17 @@ Or you can specify its address with following command:
 `,
 	}
 )
+
+
+type Response struct {
+	Code    int
+	Message string
+}
+
+func Success(message string) Response {
+	return Response{Code: 0, Message: message}
+}
+
+func Fail(message string) Response {
+	return Response{Code: 1, Message: message}
+}

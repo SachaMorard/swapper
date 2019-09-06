@@ -1,8 +1,11 @@
-package main
+package commands
 
 import (
 	"errors"
 	"fmt"
+	"github.com/sachamorard/swapper/response"
+	"github.com/sachamorard/swapper/utils"
+	"github.com/sachamorard/swapper/yaml"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -17,7 +20,7 @@ import (
 )
 
 var (
-	nodeUsage = `
+	NodeUsage = `
 swapper node COMMAND [OPTIONS].
 
 Manage a node
@@ -35,20 +38,21 @@ swapper node start [OPTIONS].
 Start a swapper node
 
 Usage:
- swapper node start [--join <hostnames>] [--detach]
+ swapper node start [--join <hostnames>] [--apply <file>] [--detach]
  swapper node start (-h|--help)
 
 Options:
  -h --help                Show this screen.
  --join=HOSTNAMES         Masters' hostnames (separated by comma)
+ --apply=FILE             Apply a specific yaml configuration file [default: default.yml]
  -d --detach              Run node in background
 
 Examples:
- To start a new node, connected with a local masters:
- $ swapper node start --join master-hostname-1
+ To start a new node, connected with one master, and apply a specific yaml configuration file:
+ $ swapper node start --join master-hostname-1 --apply my.yml
 
- To start a new node, connected with two local masters:
- $ swapper node start --join master-hostname-1,master-hostname-2
+ To start a new node, connected with two masters:
+ $ swapper node start --join master-hostname-1,master-hostname-2 --apply my.yml
 
 `
 	nodeStopUsage = `
@@ -74,16 +78,16 @@ func NodeStartArgs(argv []string) docopt.Opts {
 	return arguments
 }
 
-func NodeStart(argv []string) Response {
+func NodeStart(argv []string) response.Response {
 
 	pid := os.Getpid()
 	d1 := []byte(strconv.Itoa(pid))
-	_ = ioutil.WriteFile(pidDirectory+"/swapper-node.pid", d1, 0644)
+	_ = ioutil.WriteFile(PidDirectory+"/swapper-node.pid", d1, 0644)
 
 	arguments := NodeStartArgs(argv)
 
 	if arguments["--join"] == nil {
-		return Fail(errorMessages["need_master_addr"])
+		return response.Fail(response.ErrorMessages["need_master_addr"])
 	}
 	mastersHostname := strings.Split(arguments["--join"].(string), ",")
 
@@ -91,10 +95,10 @@ func NodeStart(argv []string) Response {
 	var masters []string
 	for _, a := range mastersHostname {
 		if a == "localhost" {
-			a, _ = GetHostname()
+			a, _ = utils.GetHostname()
 		}
 		if a == "127.0.0.1" {
-			a, _ = GetHostname()
+			a, _ = utils.GetHostname()
 		}
 
 		i := strings.Index(a, ":")
@@ -104,55 +108,56 @@ func NodeStart(argv []string) Response {
 		masters = append(masters, a)
 	}
 
-	// Get swapper.yml from master(s)
-	yamlConf, err := getYamlConfFromMasters(masters)
+	// Get yaml configuration file from master(s)
+	filename := arguments["--apply"].(string)
+	yamlConf, err := getYamlConfFromMasters(filename, masters)
 	if err != nil {
-		return Fail(err.Error())
+		return response.Fail(err.Error())
 	}
 
 	// run containers
 	err = runContainers(yamlConf)
 	if err != nil {
-		return Fail(err.Error())
+		return response.Fail(err.Error())
 	}
 
 	// create frontend haproxy conf
 	haproxyConf, err := CreateHaproxyConf(yamlConf)
 	if err != nil {
-		return Fail(err.Error())
+		return response.Fail(err.Error())
 	}
 
 	// start haproxy
 	err = startProxy(yamlConf)
 	if err != nil {
-		return Fail(err.Error())
+		return response.Fail(err.Error())
 	}
 
 	// write file into swapper-proxy to automatically start the haproxy
 	cmd := exec.Command("docker", "exec", "swapper-proxy", "bash", "-c", "echo '"+haproxyConf+"' > /app/src/haproxy.tmp.cfg")
 	_, err = cmd.Output()
 	if err != nil {
-		return Fail(errorMessages["proxy_failed"])
+		return response.Fail(response.ErrorMessages["proxy_failed"])
 	}
 
 	currentHash = yamlConf.Hash
 
 	// update regularly
-	fmt.Println("Now, listening changes...")
+	fmt.Println("Now, listening changes on "+filename+" configuration file...")
 	if arguments["--detach"] == false {
-		ListenToMasters(yamlConf)
+		ListenToMasters(filename, yamlConf)
 	} else {
 		joinArg := arguments["--join"]
 		cmd := exec.Command("swapper","node", "start", "--join", joinArg.(string))
 		_ = cmd.Start()
 	}
 
-	return Success("")
+	return response.Success("")
 }
 
-func startProxy(yamlConf YamlConf) (err error) {
+func startProxy(yamlConf yaml.YamlConf) (err error) {
 
-	Id, _ := Command("docker ps --format {{.ID}} --filter name=swapper-proxy")
+	Id, _ := utils.Command("docker ps --format {{.ID}} --filter name=swapper-proxy")
 	if Id == "" {
 		fmt.Print("Starting swapper-proxy... ")
 		var command []string
@@ -166,10 +171,10 @@ func startProxy(yamlConf YamlConf) (err error) {
 		command = append(command, "gcr.io/docker-swapper/swapper-proxy:1.0.0")
 
 		commandStr := strings.Join(command, " ")
-		_, err = Command(commandStr)
+		_, err = utils.Command(commandStr)
 		// todo: if errors, print docker log
 		if err != nil {
-			return errors.New(errorMessages["proxy_failed"])
+			return errors.New(response.ErrorMessages["proxy_failed"])
 		}
 
 		fmt.Print("Started\n")
@@ -180,7 +185,7 @@ func startProxy(yamlConf YamlConf) (err error) {
 		cmd := exec.Command("docker", "inspect", "--format", "{{ .Config.ExposedPorts }}", "swapper-proxy")
 		out, err := cmd.Output()
 		if err != nil {
-			return errors.New(errorMessages["proxy_failed"])
+			return errors.New(response.ErrorMessages["proxy_failed"])
 		}
 		restart := false
 		for _, frontend := range yamlConf.Frontends  {
@@ -190,9 +195,9 @@ func startProxy(yamlConf YamlConf) (err error) {
 		}
 		if restart == true {
 			fmt.Println("[CAREFULL] Frontend ports changed, recreate swapper-proxy with short interruption!!!")
-			_, err = Command("docker rm -f swapper-proxy")
+			_, err = utils.Command("docker rm -f swapper-proxy")
 			if err != nil {
-				return errors.New(errorMessages["proxy_stop_failed"])
+				return errors.New(response.ErrorMessages["proxy_stop_failed"])
 			}
 			return startProxy(yamlConf)
 		}
@@ -200,21 +205,21 @@ func startProxy(yamlConf YamlConf) (err error) {
 	return err
 }
 
-func runContainers(yamlConf YamlConf) (err error) {
+func runContainers(yamlConf yaml.YamlConf) (err error) {
 
 	for _, service := range yamlConf.Services  {
 		for _, container := range service.Containers  {
 
 			// If container image hasn't pulled yet
-			Image, _ := Command("docker images " + container.Image + ":" + container.Tag + " --format {{.ID}}")
+			Image, _ := utils.Command("docker images " + container.Image + ":" + container.Tag + " --format {{.ID}}")
 			if Image == "" {
 				fmt.Printf("Pulling %s... ", container.Image + ":" + container.Tag)
-				_, _ = Command("docker pull " + container.Image + ":" + container.Tag)
+				_, _ = utils.Command("docker pull " + container.Image + ":" + container.Tag)
 				fmt.Print("Pulled\n")
 			}
 
 			containerName := "swapper-container."+yamlConf.Hash+"."+container.Name+"."+strconv.Itoa(container.Index)
-			Id, _ := Command("docker ps --format {{.ID}} --filter name=" + containerName)
+			Id, _ := utils.Command("docker ps --format {{.ID}} --filter name=" + containerName)
 			if Id == "" {
 				fmt.Printf("Starting %s... ", containerName)
 				var command []string
@@ -300,7 +305,7 @@ func runContainers(yamlConf YamlConf) (err error) {
 				// todo: if errors, print docker log
 				if err != nil {
 					fmt.Println(err)
-					return errors.New(fmt.Sprintf(errorMessages["container_failed"], containerName))
+					return errors.New(fmt.Sprintf(response.ErrorMessages["container_failed"], containerName))
 				}
 
 				fmt.Print("Started\n")
@@ -323,7 +328,7 @@ func ReplaceCommandIfExist(input string) (str string, err error) {
 		cmd := exec.Command("bash","-c", command)
 		out, err := cmd.Output()
 		if err != nil {
-			return str, errors.New(fmt.Sprintf(errorMessages["command_failed"], command))
+			return str, errors.New(fmt.Sprintf(response.ErrorMessages["command_failed"], command))
 		}
 		outStr := strings.TrimSpace(string(out))
 		str = strings.Replace(str, p, outStr, -1)
@@ -331,18 +336,23 @@ func ReplaceCommandIfExist(input string) (str string, err error) {
 	return str, nil
 }
 
-func ListenToMasters(yamlConf YamlConf) {
+func ListenToMasters(filename string, yamlConf yaml.YamlConf) {
 	masters := yamlConf.Masters
 	previousYamlConf := yamlConf
 	time.Sleep(3000 * time.Millisecond)
 
-	// Get swapper.yml from master(s)
-	yamlConf, err := getYamlConfFromMasters(masters)
+	// If master driver = gcp, force master hostname
+	if yamlConf.Master.Driver == "gcp" {
+		masters = []string{"gs://swapper-master-"+yamlConf.Master.ProjectId}
+	}
+
+	// Get yaml configuration file from master(s)
+	yamlConf, err := getYamlConfFromMasters(filename, masters)
 	if err != nil {
 		fmt.Println(err.Error())
-		_ = SlackSendError(err.Error(), previousYamlConf)
+		_ = utils.SlackSendError(err.Error(), previousYamlConf)
 		time.Sleep(5000 * time.Millisecond)
-		ListenToMasters(previousYamlConf)
+		ListenToMasters(filename, previousYamlConf)
 		return
 	}
 
@@ -353,8 +363,8 @@ func ListenToMasters(yamlConf YamlConf) {
 		err = runContainers(yamlConf)
 		if err != nil {
 			fmt.Println(err.Error())
-			_ = SlackSendError("Node failed to update\n"+err.Error(), yamlConf)
-			ListenToMasters(yamlConf)
+			_ = utils.SlackSendError("Node failed to update\n"+err.Error(), yamlConf)
+			ListenToMasters(filename, yamlConf)
 			return
 		}
 
@@ -362,8 +372,8 @@ func ListenToMasters(yamlConf YamlConf) {
 		haproxyConf, err := CreateHaproxyConf(yamlConf)
 		if err != nil {
 			fmt.Println(err.Error())
-			_ = SlackSendError("Node failed to update\n"+err.Error(), yamlConf)
-			ListenToMasters(yamlConf)
+			_ = utils.SlackSendError("Node failed to update\n"+err.Error(), yamlConf)
+			ListenToMasters(filename, yamlConf)
 			return
 		}
 
@@ -371,8 +381,8 @@ func ListenToMasters(yamlConf YamlConf) {
 		err = startProxy(yamlConf)
 		if err != nil {
 			fmt.Println(err.Error())
-			_ = SlackSendError("Node failed to update\n"+err.Error(), yamlConf)
-			ListenToMasters(yamlConf)
+			_ = utils.SlackSendError("Node failed to update\n"+err.Error(), yamlConf)
+			ListenToMasters(filename, yamlConf)
 			return
 		}
 
@@ -381,9 +391,9 @@ func ListenToMasters(yamlConf YamlConf) {
 		_, err = cmd.Output()
 		if err != nil {
 			// todo rollback ?
-			fmt.Println(errorMessages["proxy_failed"])
-			_ = SlackSendError("Node failed to update\n"+errorMessages["proxy_failed"], yamlConf)
-			ListenToMasters(yamlConf)
+			fmt.Println(response.ErrorMessages["proxy_failed"])
+			_ = utils.SlackSendError("Node failed to update\n"+response.ErrorMessages["proxy_failed"], yamlConf)
+			ListenToMasters(filename, yamlConf)
 			return
 		}
 
@@ -396,11 +406,11 @@ func ListenToMasters(yamlConf YamlConf) {
 		out, err := cmd.Output()
 		if err != nil {
 			fmt.Println(err.Error())
-			ListenToMasters(yamlConf)
+			ListenToMasters(filename, yamlConf)
 			return
 		}
 		if strings.TrimSpace(string(out)) == "" {
-			ListenToMasters(yamlConf)
+			ListenToMasters(filename, yamlConf)
 			return
 		}
 		psStr := strings.Split(strings.TrimSpace(string(out)), "\n")
@@ -420,7 +430,7 @@ func ListenToMasters(yamlConf YamlConf) {
 		out, err = cmd.Output()
 		if err != nil {
 			fmt.Println(err.Error())
-			ListenToMasters(yamlConf)
+			ListenToMasters(filename, yamlConf)
 			return
 		}
 
@@ -430,28 +440,28 @@ func ListenToMasters(yamlConf YamlConf) {
 		out, err = cmd.Output()
 		if err != nil {
 			fmt.Println(err.Error())
-			ListenToMasters(yamlConf)
+			ListenToMasters(filename, yamlConf)
 			return
 		}
 
 		fmt.Println(">>> Node updated")
-		_ = SlackSendSuccess("Node updated", yamlConf)
+		_ = utils.SlackSendSuccess("Node updated", yamlConf)
 
 	}
 
-	ListenToMasters(yamlConf)
+	ListenToMasters(filename, yamlConf)
 }
 
-func NodeStop(argv []string) Response {
+func NodeStop(argv []string) response.Response {
 	_, _ = docopt.ParseArgs(nodeStopUsage, argv, "")
 
-	dat, err := ioutil.ReadFile(pidDirectory+"/swapper-node.pid")
+	dat, err := ioutil.ReadFile(PidDirectory+"/swapper-node.pid")
 	if err == nil {
 		fmt.Print("Stopping swapper-node... ")
 		p := string(dat)
 		pid, err := strconv.ParseInt(p, 10, 64)
 		if err != nil {
-			return Fail(err.Error())
+			return response.Fail(err.Error())
 		}
 		proc, err := os.FindProcess(int(pid))
 
@@ -474,24 +484,24 @@ func NodeStop(argv []string) Response {
 			fmt.Print("Already Stopped\n")
 		}
 
-		_ : os.Remove(pidDirectory+"/swapper-node.pid")
+		_ : os.Remove(PidDirectory+"/swapper-node.pid")
 	}
 
 	fmt.Print("Stopping swapper-proxy... ")
 	command := "docker stop swapper-proxy"
-	out, _ := Command(command)
+	out, _ := utils.Command(command)
 	if out != "" {
 		fmt.Println("Stopped")
 	}
 
 	fmt.Print("Stopping swapper-container(s)... ")
-	out, _ = Command("docker container ls --format {{.ID}} --filter name=swapper-container")
+	out, _ = utils.Command("docker container ls --format {{.ID}} --filter name=swapper-container")
 	if out == "" {
-		return Fail(errorMessages["containers_not_running"])
+		return response.Fail(response.ErrorMessages["containers_not_running"])
 	}
 
 	ids := strings.Replace(out, "\n", " ", -1)
 	command = "docker stop " + strings.TrimSpace(ids)
-	out, _ = Command(command)
-	return Success("Stopped\n")
+	out, _ = utils.Command(command)
+	return response.Success("Stopped\n")
 }

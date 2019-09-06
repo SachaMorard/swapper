@@ -1,4 +1,4 @@
-package main
+package commands
 
 import (
 	"testing"
@@ -6,7 +6,7 @@ import (
 
 func TestVersion(t *testing.T) {
 	response := Version()
-	if response.Message != version {
+	if response.Message != version{
 		t.Fail()
 	}
 }

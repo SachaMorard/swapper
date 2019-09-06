@@ -1,7 +1,9 @@
-package main
+package commands
 
 import (
 	"fmt"
+	"github.com/sachamorard/swapper/response"
+	"github.com/sachamorard/swapper/utils"
 	"io/ioutil"
 	"os"
 	"strconv"
@@ -9,12 +11,12 @@ import (
 	"syscall"
 )
 
-func Status() Response {
+func Status() response.Response {
 	fmt.Println("")
 	fmt.Println("MASTER(S)")
-	files, err := ioutil.ReadDir(pidDirectory)
+	files, err := ioutil.ReadDir(PidDirectory)
 	if err != nil {
-		return Fail(err.Error())
+		return response.Fail(err.Error())
 	}
 	var masters []string
 	for _, f := range files {
@@ -23,13 +25,13 @@ func Status() Response {
 			port := strings.Replace(f.Name(),"swapper-master-","", -1)
 			port = strings.Replace(port,".pid","", -1)
 
-			hostname, _ := GetHostname()
-			dat, err := ioutil.ReadFile(pidDirectory+"/"+f.Name())
+			hostname, _ := utils.GetHostname()
+			dat, err := ioutil.ReadFile(PidDirectory+"/"+f.Name())
 			if err == nil {
 				p := string(dat)
 				pid, err := strconv.ParseInt(p, 10, 64)
 				if err != nil {
-					return Fail(err.Error())
+					return response.Fail(err.Error())
 				}
 				proc, err := os.FindProcess(int(pid))
 
@@ -40,7 +42,7 @@ func Status() Response {
 				if err == nil {
 					fmt.Println(hostname+":"+port+" is running (pid: "+p+")")
 				} else {
-					_ : os.Remove(pidDirectory+"/"+f.Name())
+					_ : os.Remove(PidDirectory+"/"+f.Name())
 				}
 			}
 		}
@@ -51,12 +53,12 @@ func Status() Response {
 
 	fmt.Println("")
 	fmt.Println("NODE")
-	dat, err := ioutil.ReadFile(pidDirectory+"/swapper-node.pid")
+	dat, err := ioutil.ReadFile(PidDirectory+"/swapper-node.pid")
 	if err == nil {
 		p := string(dat)
 		pid, err := strconv.ParseInt(p, 10, 64)
 		if err != nil {
-			return Fail(err.Error())
+			return response.Fail(err.Error())
 		}
 		proc, err := os.FindProcess(int(pid))
 
@@ -67,7 +69,7 @@ func Status() Response {
 		if err == nil {
 			fmt.Println("swapper-node is running (pid: "+p+")")
 		} else {
-			_ : os.Remove(pidDirectory+"/swapper-node.pid")
+			_ : os.Remove(PidDirectory+"/swapper-node.pid")
 		}
 	} else {
 		fmt.Println("-")
@@ -75,7 +77,7 @@ func Status() Response {
 
 	fmt.Println("")
 	fmt.Println("PROXY")
-	Ports, _ := Command("docker ps --format {{.Ports}} --filter name=swapper-proxy")
+	Ports, _ := utils.Command("docker ps --format {{.Ports}} --filter name=swapper-proxy")
 	if Ports != "" {
 		fmt.Println("swapper-proxy is running (ports: "+strings.Replace(Ports, "\n", "", -1)+")")
 	} else {
@@ -83,15 +85,15 @@ func Status() Response {
 	}
 
 	fmt.Println("")
-	Ids, _ := Command("docker ps --format {{.ID}} --filter name=swapper-container.")
+	Ids, _ := utils.Command("docker ps --format {{.ID}} --filter name=swapper-container.")
 	if Ids != "" {
-		containers, _ := Command("docker ps --filter name=swapper-container.")
+		containers, _ := utils.Command("docker ps --filter name=swapper-container.")
 		fmt.Println(containers)
 	} else {
 		fmt.Println("CONTAINER(S)")
 		fmt.Println("-")
 	}
 
-	return Success("")
+	return response.Success("")
 }
 
