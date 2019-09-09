@@ -148,7 +148,7 @@ func NodeStart(argv []string) response.Response {
 		ListenToMasters(filename, yamlConf)
 	} else {
 		joinArg := arguments["--join"]
-		cmd := exec.Command("swapper","node", "start", "--join", joinArg.(string))
+		cmd := exec.Command("swapper","node", "start", "--join", joinArg.(string), "--apply", filename)
 		_ = cmd.Start()
 	}
 
