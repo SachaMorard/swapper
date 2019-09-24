@@ -386,9 +386,21 @@ func ListenToMasters(filename string, yamlConf yaml.YamlConf) {
 			return
 		}
 
-		// write file into swapper-proxy to automatically reload the haproxy
-		cmd := exec.Command("docker", "exec", "swapper-proxy", "bash", "-c", "echo '"+haproxyConf+"' > /app/src/haproxy.tmp.cfg")
+		// write new file into swapper-proxy
+		fmt.Println("Reload proxy")
+		cmd := exec.Command("docker", "exec", "swapper-proxy", "bash", "-c", "echo '"+haproxyConf+"' > /app/src/haproxy.cfg")
 		_, err = cmd.Output()
+		if err != nil {
+			// todo rollback ?
+			fmt.Println(response.ErrorMessages["proxy_failed"])
+			_ = utils.SlackSendError("Node failed to update\n"+response.ErrorMessages["proxy_failed"], yamlConf)
+			ListenToMasters(filename, yamlConf)
+			return
+		}
+
+		// reload swapper-proxy
+		cmdKill := exec.Command("docker", "exec", "swapper-proxy", "bash", "-c", "kill -HUP $(cat /var/run/haproxy.pid)")
+		_, err = cmdKill.Output()
 		if err != nil {
 			// todo rollback ?
 			fmt.Println(response.ErrorMessages["proxy_failed"])
@@ -400,8 +412,9 @@ func ListenToMasters(filename string, yamlConf yaml.YamlConf) {
 		// update currentHash
 		currentHash = yamlConf.Hash
 
+
 		// remove old containers and images
-		fmt.Println("Remove unused nodes")
+		fmt.Println("Remove unused containers")
 		cmd = exec.Command("docker", "container", "ls", "--format", "{{.ID}} {{.Names}}", "--filter", "name=swapper-container.")
 		out, err := cmd.Output()
 		if err != nil {
@@ -415,18 +428,17 @@ func ListenToMasters(filename string, yamlConf yaml.YamlConf) {
 		}
 		psStr := strings.Split(strings.TrimSpace(string(out)), "\n")
 
-		var rmCmd []string
-		rmCmd = append(rmCmd, "docker")
-		rmCmd = append(rmCmd, "rm")
-		rmCmd = append(rmCmd, "-f")
-		rmCmd = append(rmCmd, "-v")
+		// Stop unused containers
+		var stopCmd []string
+		stopCmd = append(stopCmd, "docker")
+		stopCmd = append(stopCmd, "stop")
 		for _, v := range psStr  {
 			containerPs := strings.Split(v, " ")
 			if strings.Contains(containerPs[1], "swapper-container." + yamlConf.Hash) == false {
-				rmCmd = append(rmCmd, containerPs[0])
+				stopCmd = append(stopCmd, containerPs[0])
 			}
 		}
-		cmd = exec.Command(rmCmd[0], rmCmd[1:]...)
+		cmd = exec.Command(stopCmd[0], stopCmd[1:]...)
 		out, err = cmd.Output()
 		if err != nil {
 			fmt.Println(err.Error())
@@ -435,7 +447,6 @@ func ListenToMasters(filename string, yamlConf yaml.YamlConf) {
 		}
 
 		// remove unused docker images to save space
-		fmt.Println("Remove unused images")
 		cmd = exec.Command("docker", "system", "prune", "--all", "--force")
 		out, err = cmd.Output()
 		if err != nil {
