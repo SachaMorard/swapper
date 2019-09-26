@@ -1,3 +1,7 @@
+## 1.0.3
+* feat: add swapper upgrade command
+* fix: errors when proxy reloads
+
 ## 1.0.2
 * chore: manage dependencies with go modules
 * feat: allow multi yaml file deployment on masters

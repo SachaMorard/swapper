@@ -17,6 +17,7 @@ Commands:
  status     Status of your 
  deploy     Deploy a new Swapper configuration
  version    Show the Swapper version information
+ upgrade    Upgrade version of swapper
 
 Run 'swapper COMMAND --help' for more information on a command.
 
@@ -77,6 +78,8 @@ func main() {
 		response = commands.Status()
 	case "version":
 		response = commands.Version()
+	case "upgrade":
+		response = commands.Upgrade(os.Args[1:])
 	default:
 		response = Help()
 	}
