@@ -15,9 +15,9 @@ Swapper is fast, distributed, and **SIMPLE**!
 Run this command to download the current stable release of Swapper:
 
 ```bash
-sudo curl -L "https://github.com/SachaMorard/swapper/releases/download/1.0.2/swapper-$(uname -s)-$(uname -m)" -o /usr/local/bin/swapper
+sudo curl -L "https://github.com/SachaMorard/swapper/releases/download/1.0.3/swapper-$(uname -s)-$(uname -m)" -o /usr/local/bin/swapper
 ```
->To install a different version of Swapper, substitute 1.0.2 with the version of Swapper you want to use.
+>To install a different version of Swapper, substitute 1.0.3 with the version of Swapper you want to use.
 
 Apply executable permissions to the binary:
 
